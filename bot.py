@@ -229,21 +229,26 @@ def remove_special_characters(text):
 
 async def play_audio(voice_client):
     global is_playing_audio, tts_queue
+    audio_started = asyncio.Future()
+
+    def after_play(_):
+        voice_client.stop()
+        audio_started.set_result(None)
+
     while not tts_queue.empty():
         output_filename, audio_data, sample_rate = tts_queue.get()
         audio_source = discord.FFmpegPCMAudio(executable="ffmpeg", source=output_filename)
         audio_source = discord.PCMVolumeTransformer(audio_source, volume=0.8)
 
-        def play_next(_):
-            voice_client.stop()
-
-        voice_client.play(audio_source, after=play_next)
+        voice_client.play(audio_source, after=after_play)
 
         num_frames = len(audio_data) // 2
         duration = num_frames / sample_rate
         await asyncio.sleep(duration + 1)
 
     is_playing_audio = False
+
+    return audio_started
 
 async def run_in_executor(func, *args):
     loop = asyncio.get_event_loop()
@@ -334,7 +339,7 @@ class Dropdown(discord.ui.Select):
             current_voice = selected_voice
             print(f'Modelo de voz cambiado a {current_voice}')
             embed = discord.Embed(title=f'La voz se ha cambiado a {selected_voice}', color=0XBABBE1)
-            await interaction.response.send_message(embed=embed, ephemeral=True)
+            await interaction.response.send_message(embed=embed)
         else:
             embed = discord.Embed(title=f'La voz no es válida', color=0XBABBE1)
             await interaction.response.send_message(embed=embed, ephemeral=True)
@@ -344,16 +349,12 @@ async def voz(interaction: discord.Interaction):
     global current_voice
 
     if current_voice is None:
-        embed = discord.Embed(title=f'No se ha seleccionado ninguna voz', color=0XBABBE1)
+        await interaction.response.send_message(embed=discord.Embed(title=f'No se ha seleccionado ninguna voz', color=0XBABBE1), view=CommandDropdownView(), ephemeral=True)
     else:
-        embed = discord.Embed(title=f'La voz actual es {current_voice}', color=0XBABBE1)
-
-    await interaction.response.send_message(embed=embed, view=CommandDropdownView(), ephemeral=True)
+        await interaction.response.send_message(embed=discord.Embed(title=f'La voz actual es {current_voice}', color=0XBABBE1), view=CommandDropdownView(), ephemeral=True)
 
 async def send_embed_with_buttons(interaction: discord.Interaction, title: str):
-    embed = discord.Embed(title=title, color=0XBABBE1)
-    view = BotonesTTS()
-    await interaction.followup.send(embed=embed, view=view, ephemeral=True)
+    await interaction.edit_original_response(embed=discord.Embed(title=title, color=0XBABBE1), view=BotonesTTS())
 
 class BotonesTTS(discord.ui.View):
     @discord.ui.button(label="⏸️", style=discord.ButtonStyle.gray)
@@ -411,18 +412,20 @@ async def tts(interaction, mensaje: str):
 
                 if not is_playing_audio:
                     is_playing_audio = True
-                    await interaction.followup.send(embed=discord.Embed(title="Reproduciendo TTS", color=0XBABBE1), view=BotonesTTS(), ephemeral=True)
-                    await play_audio(voice_client)
-                    await interaction.followup.send(embed=discord.Embed(title=f'TTS reproducido', color=0XBABBE1, timestamp=datetime.datetime.now()), ephemeral=True)
-                    print(f"TTS procesado y reproducido correctamente")
+                    await interaction.edit_original_response(embed=discord.Embed(title="Reproduciendo TTS", color=0XBABBE1), view=BotonesTTS())
+                    audio_started = await play_audio(voice_client)
+                    await audio_started
+                    if not voice_client.is_playing() and not voice_client.is_paused():
+                        await interaction.edit_original_response(embed=discord.Embed(title=f'TTS reproducido', color=0XBABBE1, timestamp=datetime.datetime.now()))
+                        print(f"TTS procesado y reproducido correctamente")
                 else:
                     queue_position = tts_queue.qsize() - 1
-                    await interaction.followup.send(embed=discord.Embed(title=f'TTS agregado a la cola', color=0XBABBE1, timestamp=datetime.datetime.now()).set_footer(text=f'Tu solicitud de TTS está en la posición {queue_position} de la cola.'), ephemeral=True)
+                    await interaction.edit_original_response(embed=discord.Embed(title=f'TTS agregado a la cola', color=0XBABBE1, timestamp=datetime.datetime.now()).set_footer(text=f'Tu solicitud de TTS está en la posición {queue_position} de la cola.'))
                     print(f'TTS agregado a la cola en la posición {queue_position}')
 
     except Exception as e:
         print(f"Ocurrió un error: {str(e)}")
-        await interaction.followup.send(embed=discord.Embed(title=f'Ocurrió un error al generar el TTS', color=0X990033), ephemeral=True)
+        await interaction.edit_original_response(embed=discord.Embed(title=f'Ocurrió un error al generar el TTS', color=0X990033))
         await voice_client.disconnect()
 
 client.run(discord_token)
