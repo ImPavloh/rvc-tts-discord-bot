@@ -64,7 +64,7 @@ Una vez que el bot ha sido invitado a tu servidor de Discord, puedes interactuar
 
 ⚙️  `config.ini`: Archivo de configuración que almacena información clave, como el [token de Discord](https://discord.com/developers/applications) del bot y la clave API de [ElevenLabs](https://elevenlabs.io). Cambia los datos antes de ejecutar el bot.
 
-🗂️  `models/`: Carpeta que debe de contener los modelos de voz que se utilizarán para la conversión de texto a voz. Si todo está correcto, el bot detecterá automáticamente los modelos.
+🗂️  `models/`: Carpeta que debe de contener los modelos de voz que se utilizarán para la conversión de texto a voz. Si todo está correcto, el bot detecterá automáticamente los modelos y se generarán unos archivos de información para el programa.
 
 📑  `requirements.txt`: Un archivo que contiene todas las dependencias de Python necesarias para el funcionamiento del bot. Recuerda ejecutar el comando de [dependencias](#dependencias-).
 
