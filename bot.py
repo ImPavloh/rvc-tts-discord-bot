@@ -358,16 +358,19 @@ async def send_embed_with_buttons(interaction: discord.Interaction, title: str):
 class BotonesTTS(discord.ui.View):
     @discord.ui.button(label="⏸️", style=discord.ButtonStyle.gray)
     async def pausar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer()
         interaction.guild.voice_client.pause()
         await send_embed_with_buttons(interaction, title='TTS pausado')
 
     @discord.ui.button(label="▶️", style=discord.ButtonStyle.green)
     async def reanudar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer()
         interaction.guild.voice_client.resume()
         await send_embed_with_buttons(interaction, title='TTS reanudado')
 
     @discord.ui.button(label="⏹️", style=discord.ButtonStyle.red)
     async def detener(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer()
         interaction.guild.voice_client.stop()
         await send_embed_with_buttons(interaction, title='TTS detenido')
 
@@ -408,6 +411,7 @@ async def tts(interaction, mensaje: str):
 
                 if not is_playing_audio:
                     is_playing_audio = True
+                    await interaction.followup.send(embed=discord.Embed(title="Reproduciendo TTS", color=0XBABBE1), view=BotonesTTS(), ephemeral=True)
                     await play_audio(voice_client)
                     await interaction.followup.send(embed=discord.Embed(title=f'TTS reproducido', color=0XBABBE1, timestamp=datetime.datetime.now()), ephemeral=True)
                     print(f"TTS procesado y reproducido correctamente")
