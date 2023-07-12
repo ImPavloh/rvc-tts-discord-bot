@@ -1,0 +1,9 @@
+{
+	"ModelName": {
+		"enable": true,
+		"model_path": "ModelName.pth",
+		"title": "ModelName",
+		"feature_retrieval_library": "added_ModelName.index",
+		"author": "ModelName"
+	}
+}
