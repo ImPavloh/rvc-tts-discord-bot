@@ -17,6 +17,7 @@ import torch
 import config
 import asyncio
 import librosa
+import hashlib
 import discord
 import tempfile
 import datetime
@@ -52,6 +53,11 @@ config = config.Config()
 client = discord.Client(intents=discord.Intents.all())
 tree = discord.app_commands.CommandTree(client)
 
+def file_checksum(file_path):
+    with open(file_path, 'rb') as f:
+        file_data = f.read()
+        return hashlib.md5(file_data).hexdigest()
+
 def generate_model_info_files():
     folder_info = {}
     model_directory = "models/"
@@ -65,6 +71,15 @@ def generate_model_info_files():
             }
 
             model_info = {}
+            regenerate_model_info = False
+            model_info_path = os.path.join(model_directory, category_name, 'model_info.json')
+            if os.path.exists(model_info_path):
+                with open(model_info_path, 'r') as f:
+                    existing_model_info = json.load(f)
+            else:
+                existing_model_info = None
+                regenerate_model_info = True
+
             for model_name in os.listdir(category_directory):
                 model_path = os.path.join(category_directory, model_name)
                 if os.path.isdir(model_path):
@@ -73,17 +88,30 @@ def generate_model_info_files():
                     if len(model_files) == 2:
                         pth_file = [f for f in model_files if f.endswith('.pth')][0]
                         index_file = [f for f in model_files if f.endswith('.index')][0]
+                        pth_checksum = file_checksum(os.path.join(model_path, pth_file))
+                        index_checksum = file_checksum(os.path.join(model_path, index_file))
+                        
+                        if existing_model_info is None or model_name not in existing_model_info or \
+                           existing_model_info[model_name]['model_path_checksum'] != pth_checksum or \
+                           existing_model_info[model_name]['index_path_checksum'] != index_checksum:
+                            regenerate_model_info = True
+
                         model_info[model_name] = {
                             "title": model_name,
                             "model_path": pth_file,
-                            "feature_retrieval_library": index_file
+                            "feature_retrieval_library": index_file,
+                            "model_path_checksum": pth_checksum,
+                            "index_path_checksum": index_checksum
                         }
 
-            with open(os.path.join(model_directory, category_name, 'model_info.json'), 'w') as f:
-                json.dump(model_info, f, indent=4)
+            if regenerate_model_info:
+                with open(os.path.join(model_directory, category_name, 'model_info.json'), 'w') as f:
+                    json.dump(model_info, f, indent=4)
 
-    with open(os.path.join(model_directory, 'folder_info.json'), 'w') as f:
-        json.dump(folder_info, f, indent=4)
+    folder_info_path = os.path.join(model_directory, 'folder_info.json')
+    if not os.path.exists(folder_info_path):
+        with open(folder_info_path, 'w') as f:
+            json.dump(folder_info, f, indent=4)
 
 generate_model_info_files()
 
