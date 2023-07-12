@@ -6,13 +6,14 @@ for logger_name in ("paramiko", "xformers", "fairseq", "discord.client", "discor
 
 print("RVC TTS Discord Bot  -  @impavloh")
 print("-------------------------------------")
-print("Cargando configuración y modelos...")
+print("Cargando configuración y modelos")
 
 import os
 import sys
 import glob
 import json
 import wave
+import queue
 import torch
 import config
 import asyncio
@@ -53,12 +54,16 @@ config = config.Config()
 client = discord.Client(intents=discord.Intents.all())
 tree = discord.app_commands.CommandTree(client)
 
+tts_queue = queue.Queue()
+is_playing_audio = False
+
 def file_checksum(file_path):
     with open(file_path, 'rb') as f:
         file_data = f.read()
         return hashlib.md5(file_data).hexdigest()
 
 def generate_model_info_files():
+    print("Generando archivos de información del modelo")
     folder_info = {}
     model_directory = "models/"
 
@@ -222,10 +227,23 @@ def load_hubert():
 def remove_special_characters(text):
     return ''.join(c for c in text if not unicodedata.category(c).startswith('So'))
 
-async def play_audio(voice_client, output_filename):
-    audio_source = discord.FFmpegPCMAudio(executable="ffmpeg", source=output_filename)
-    audio_source = discord.PCMVolumeTransformer(audio_source, volume=0.8)
-    voice_client.play(audio_source)
+async def play_audio(voice_client):
+    global is_playing_audio, tts_queue
+    while not tts_queue.empty():
+        output_filename, audio_data, sample_rate = tts_queue.get()
+        audio_source = discord.FFmpegPCMAudio(executable="ffmpeg", source=output_filename)
+        audio_source = discord.PCMVolumeTransformer(audio_source, volume=0.8)
+
+        def play_next(_):
+            voice_client.stop()
+
+        voice_client.play(audio_source, after=play_next)
+
+        num_frames = len(audio_data) // 2
+        duration = num_frames / sample_rate
+        await asyncio.sleep(duration + 1)
+
+    is_playing_audio = False
 
 async def run_in_executor(func, *args):
     loop = asyncio.get_event_loop()
@@ -238,7 +256,7 @@ async def get_vc_fn_result(vc_fn, text):
 
 load_hubert()
 categories = load_specific_model(target_category_name, target_model_name)
-print("Iniciando bot...")
+print("Iniciando bot")
 
 @client.event
 async def on_ready():
@@ -355,12 +373,13 @@ class BotonesTTS(discord.ui.View):
 
 @tree.command(name="tts", description="Escribe el mensaje que quieres decir por voz")
 async def tts(interaction, mensaje: str):
+    global is_playing_audio, tts_queue
     if not interaction.user.voice:
         await interaction.response.send_message(embed=discord.Embed(title=f'Necesitas estar en un canal de voz para usar este comando', color=0XBABBE1), ephemeral=True)
         return
 
     sanitized_text = remove_special_characters(mensaje)
-    await interaction.response.send_message(embed=discord.Embed(title=f'Generando TTS...', color=0XBABBE1, timestamp=datetime.datetime.now()).set_footer(text="Puede demorarse unos segundos."), ephemeral=True)
+    await interaction.response.send_message(embed=discord.Embed(title=f'Generando TTS', color=0XBABBE1, timestamp=datetime.datetime.now()).set_footer(text="Puede demorarse unos segundos."), ephemeral=True)
 
     voice_client = None
     for vc in client.voice_clients:
@@ -385,10 +404,17 @@ async def tts(interaction, mensaje: str):
                     wav_file.writeframes(audio_data)
                     wav_file.close()
 
-                await interaction.followup.send(embed=discord.Embed(title="Reproduciendo TTS", color=0XBABBE1), view=BotonesTTS(), ephemeral=True)
-                await play_audio(voice_client, output_filename)
-                await interaction.followup.send(embed=discord.Embed(title=f'TTS reproducido', color=0XBABBE1, timestamp=datetime.datetime.now()), ephemeral=True)
-                print(f"TTS procesado y reproducido correctamente")
+                tts_queue.put((output_filename, audio_data, sample_rate))
+
+                if not is_playing_audio:
+                    is_playing_audio = True
+                    await play_audio(voice_client)
+                    await interaction.followup.send(embed=discord.Embed(title=f'TTS reproducido', color=0XBABBE1, timestamp=datetime.datetime.now()), ephemeral=True)
+                    print(f"TTS procesado y reproducido correctamente")
+                else:
+                    queue_position = tts_queue.qsize() - 1
+                    await interaction.followup.send(embed=discord.Embed(title=f'TTS agregado a la cola', color=0XBABBE1, timestamp=datetime.datetime.now()).set_footer(text=f'Tu solicitud de TTS está en la posición {queue_position} de la cola.'), ephemeral=True)
+                    print(f'TTS agregado a la cola en la posición {queue_position}')
 
     except Exception as e:
         print(f"Ocurrió un error: {str(e)}")
