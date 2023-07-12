@@ -10,6 +10,7 @@ print("Cargando configuración y modelos...")
 
 import os
 import sys
+import glob
 import json
 import wave
 import torch
@@ -51,14 +52,23 @@ config = config.Config()
 client = discord.Client(intents=discord.Intents.all())
 tree = discord.app_commands.CommandTree(client)
 
-target_category_name = "Pavloh"
-target_model_name = "Pavloh"
-current_voice = "Pavloh"
+allowed_voices = {}
+options = []
 
-allowed_voices = {
-    "Pavloh": ("Pavloh", "Pavloh"),
-    "Joseju": ("Joseju", "Joseju")
-}
+model_info_files = glob.glob('models/**/model_info.json', recursive=True)
+for model_info_file in model_info_files:
+    with open(model_info_file, 'r') as f:
+        model_info = json.load(f)
+    for model_name in model_info:
+        if model_info[model_name]['enable']:
+            allowed_voices[model_name] = (model_name, model_name)
+            options.append(discord.SelectOption(label=model_name, emoji='📦'))
+
+first_model_name = list(allowed_voices.keys())[0]
+
+target_category_name = first_model_name
+target_model_name = first_model_name
+current_voice = first_model_name
 
 def create_vc_fn(model_title, tgt_sr, net_g, vc, if_f0, version, file_index):
     def vc_fn(tts_text):
