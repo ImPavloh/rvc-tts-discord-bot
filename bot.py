@@ -52,6 +52,41 @@ config = config.Config()
 client = discord.Client(intents=discord.Intents.all())
 tree = discord.app_commands.CommandTree(client)
 
+def generate_model_info_files():
+    folder_info = {}
+    model_directory = "models/"
+
+    for category_name in os.listdir(model_directory):
+        category_directory = os.path.join(model_directory, category_name)
+        if os.path.isdir(category_directory):
+            folder_info[category_name] = {
+                "title": category_name,
+                "folder_path": category_name
+            }
+
+            model_info = {}
+            for model_name in os.listdir(category_directory):
+                model_path = os.path.join(category_directory, model_name)
+                if os.path.isdir(model_path):
+                    model_files = os.listdir(model_path)
+                    model_files = [f for f in model_files if f.endswith('.pth') or f.endswith('.index')]
+                    if len(model_files) == 2:
+                        pth_file = [f for f in model_files if f.endswith('.pth')][0]
+                        index_file = [f for f in model_files if f.endswith('.index')][0]
+                        model_info[model_name] = {
+                            "title": model_name,
+                            "model_path": pth_file,
+                            "feature_retrieval_library": index_file
+                        }
+
+            with open(os.path.join(model_directory, category_name, 'model_info.json'), 'w') as f:
+                json.dump(model_info, f, indent=4)
+
+    with open(os.path.join(model_directory, 'folder_info.json'), 'w') as f:
+        json.dump(folder_info, f, indent=4)
+
+generate_model_info_files()
+
 allowed_voices = {}
 options = []
 
@@ -60,9 +95,8 @@ for model_info_file in model_info_files:
     with open(model_info_file, 'r') as f:
         model_info = json.load(f)
     for model_name in model_info:
-        if model_info[model_name]['enable']:
-            allowed_voices[model_name] = (model_name, model_name)
-            options.append(discord.SelectOption(label=model_name, emoji='📦'))
+        allowed_voices[model_name] = (model_name, model_name)
+        options.append(discord.SelectOption(label=model_name, emoji='📦'))
 
 first_model_name = list(allowed_voices.keys())[0]
 
@@ -112,7 +146,7 @@ def load_specific_model(target_category_name, target_model_name):
         with open(f"models/{category_folder}/model_info.json", "r", encoding="utf-8") as f:
             models_info = json.load(f)
         for character_name, info in models_info.items():
-            if character_name != target_model_name or not info['enable']:
+            if character_name != target_model_name:
                 continue
             models = load_model_data(category_folder, character_name, info)
         categories.append([category_title, category_folder, models])
@@ -121,7 +155,6 @@ def load_specific_model(target_category_name, target_model_name):
 def load_model_data(category_folder, character_name, info):
     model_title = info['title']
     model_name = info['model_path']
-    model_author = info.get("author", None)
     model_index = f"models/{category_folder}/{character_name}/{info['feature_retrieval_library']}"
     cpt = torch.load(f"models/{category_folder}/{character_name}/{model_name}", map_location="cpu")
     tgt_sr = cpt["config"][-1]
@@ -138,7 +171,7 @@ def load_model_data(category_folder, character_name, info):
         net_g = net_g.float()
     vc = VC(tgt_sr, config)
     print(f"Modelo {character_name} RVC ({version.upper()}) cargado")
-    return [(character_name, model_title, model_author, version.upper(), create_vc_fn(model_title, tgt_sr, net_g, vc, if_f0, version, model_index))]
+    return [(character_name, model_title, version.upper(), create_vc_fn(model_title, tgt_sr, net_g, vc, if_f0, version, model_index))]
 
 def load_model_net_g(cpt, if_f0, version):
     if version == "v1":
@@ -242,12 +275,6 @@ class CommandDropdownView(discord.ui.View):
 
 class Dropdown(discord.ui.Select):
     def __init__(self):
-
-        options = [
-            discord.SelectOption(label='Joseju', emoji='📦'),
-            discord.SelectOption(label='Pavloh', emoji='📦'),
-        ]
-
         super().__init__(placeholder='Elige un modelo de voz', min_values=1, max_values=1, options=options)
 
     async def callback(self, interaction: discord.Interaction):
@@ -319,7 +346,7 @@ async def tts(interaction, mensaje: str):
     try:
         for (folder_title, folder, models) in categories:
             print(f'Procesando TTS con la voz de {folder_title}')
-            for character_name, model_title, model_author, model_version, vc_fn in models:
+            for character_name, model_title, model_version, vc_fn in models:
                 sample_rate, audio_data = await get_vc_fn_result(vc_fn, sanitized_text)
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmpfile:
                     output_filename = tmpfile.name
