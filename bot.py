@@ -114,9 +114,8 @@ def generate_model_info_files():
                     json.dump(model_info, f, indent=4)
 
     folder_info_path = os.path.join(model_directory, 'folder_info.json')
-    if not os.path.exists(folder_info_path):
-        with open(folder_info_path, 'w') as f:
-            json.dump(folder_info, f, indent=4)
+    with open(folder_info_path, 'w') as f:
+        json.dump(folder_info, f, indent=4)
 
 generate_model_info_files()
 
