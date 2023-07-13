@@ -295,28 +295,17 @@ async def salir(interaction: discord.Interaction):
     await interaction.response.send_message(embed=discord.Embed(title=f'Me he desconectado del canal de voz', color=0XBABBE1), ephemeral=True)
 
 @tree.command(name="ayuda", description="Muestra una lista con todos los comandos del bot")
-async def ayuda(interaction: discord.Interaction): 
-    embed = discord.Embed(title="🎤 TTS + IA 🔊", color=0XBABBE1, timestamp=datetime.datetime.now())
-
-    embed.add_field(name=":loud_sound: Comando TTS",
-                    value="`/tts <mensaje>`: Convierte texto a voz y reprodúcelo en el canal de voz",
-                    inline=False)
-
-    embed.add_field(name=":speaker: Comandos del canal de voz",
-                    value="`/conectar`: Conecta/mueve el bot al canal\n"
-                          "`/desconectar`: Desconecta el bot del canal",
-                    inline=False)
-
-    embed.add_field(name=":microphone2: Cambiar voz",
-                    value="`/voz`: Cambia la voz del TTS a la voz especificada.",
-                    inline=False)
-
-    embed.add_field(name=":question: Comandos extra",
-                    value="`/ayuda`: Muestra este mensaje de ayuda",
-                    inline=False)
-
+async def ayuda(interaction: discord.Interaction):
+    embed = discord.Embed(title="🎤  TTS + IA 🔊 ", color=0XBABBE1, timestamp=datetime.datetime.now())
+    embed.add_field(name=":loud_sound: Comando TTS", value="`/tts <mensaje>`: Convierte texto a voz y reprodúcelo en el canal de voz", inline=False)
+    embed.add_field(name=":speaker: Comandos del canal de voz", value="`/conectar`: Conecta/mueve el bot al canal\n" "`/desconectar`: Desconecta el bot del canal", inline=False)
+    embed.add_field(name=":microphone2: Cambiar voz", value="`/voz`: Cambia la voz del TTS a la voz especificada.", inline=False)
+    embed.add_field(name=":question: Comandos extra", value="`/ayuda`: Muestra este mensaje de ayuda", inline=False)
     embed.set_footer(text="RVC TTS Discord Bot  -  @impavloh")
-    await interaction.response.send_message(embed=embed)
+    view = discord.ui.View()
+    view.add_item(discord.ui.Button(label='Twitter', style=discord.ButtonStyle.blurple, url='https://twitter.com/impavloh'))
+    view.add_item(discord.ui.Button(label='GitHub', style=discord.ButtonStyle.link, url='https://github.com/impavloh'))
+    await interaction.response.send_message(content=interaction.user.mention, embed=embed, view=view)
 
 class CommandDropdownView(discord.ui.View):
     def __init__(self):
@@ -352,27 +341,28 @@ async def voz(interaction: discord.Interaction):
     else:
         await interaction.response.send_message(embed=discord.Embed(title=f'La voz actual es {current_voice}', color=0XBABBE1), view=CommandDropdownView(), ephemeral=True)
 
-async def send_embed_with_buttons(interaction: discord.Interaction, title: str):
-    await interaction.edit_original_response(embed=discord.Embed(title=title, color=0XBABBE1), view=BotonesTTS())
-
-class BotonesTTS(discord.ui.View):
-    @discord.ui.button(label="⏸️", style=discord.ButtonStyle.gray)
-    async def pausar(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.defer()
-        interaction.guild.voice_client.pause()
-        await send_embed_with_buttons(interaction, title='TTS pausado')
-
+class BotonesTTS2(discord.ui.View):
     @discord.ui.button(label="▶️", style=discord.ButtonStyle.green)
     async def reanudar(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer()
         interaction.guild.voice_client.resume()
-        await send_embed_with_buttons(interaction, title='TTS reanudado')
-
+        await interaction.edit_original_response(view=BotonesTTS(), embed=discord.Embed(title=f'Reproduciendo TTS', color=0X07ce1b, timestamp=datetime.datetime.now()).set_footer(text="TTS reanudado"))
     @discord.ui.button(label="⏹️", style=discord.ButtonStyle.red)
     async def detener(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer()
         interaction.guild.voice_client.stop()
-        await send_embed_with_buttons(interaction, title='TTS detenido')
+        await interaction.edit_original_response(view=None, embed=discord.Embed(title=f'Reproduciendo TTS', color=0Xce0743, timestamp=datetime.datetime.now()).set_footer(text="TTS detenido"))
+class BotonesTTS(discord.ui.View):
+    @discord.ui.button(label="⏸️", style=discord.ButtonStyle.green)
+    async def pausar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer()
+        interaction.guild.voice_client.pause()
+        await interaction.edit_original_response(view=BotonesTTS2(), embed=discord.Embed(title='Reproduciendo TTS', color=0Xce6307, timestamp=datetime.datetime.now()).set_footer(text="TTS pausado"))
+    @discord.ui.button(label="⏹️", style=discord.ButtonStyle.red)
+    async def detener(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer()
+        interaction.guild.voice_client.stop()
+        await interaction.edit_original_response(view=None, embed=discord.Embed(title='Reproduciendo TTS', color=0Xce0743, timestamp=datetime.datetime.now()).set_footer(text="TTS detenido"))
 
 @tree.command(name="tts", description="Escribe el mensaje que quieres decir por voz")
 async def tts(interaction, mensaje: str):
@@ -382,7 +372,7 @@ async def tts(interaction, mensaje: str):
         return
 
     sanitized_text = remove_special_characters(mensaje)
-    await interaction.response.send_message(embed=discord.Embed(title=f'Generando TTS', color=0XBABBE1, timestamp=datetime.datetime.now()).set_footer(text="Puede demorarse unos segundos."), ephemeral=True)
+    await interaction.response.send_message(embed=discord.Embed(title=f'Generando TTS', color=0XBABBE1, timestamp=datetime.datetime.now()).set_footer(text="Puede demorarse unos segundos"), ephemeral=True)
 
     voice_client = None
     for vc in client.voice_clients:
@@ -415,16 +405,16 @@ async def tts(interaction, mensaje: str):
                     audio_started = await play_audio(voice_client)
                     await audio_started
                     if not voice_client.is_playing() and not voice_client.is_paused():
-                        await interaction.edit_original_response(embed=discord.Embed(title=f'TTS reproducido', color=0XBABBE1, timestamp=datetime.datetime.now()))
+                        await interaction.edit_original_response(view=None, embed=discord.Embed(title=f'TTS reproducido', color=0XBABBE1, timestamp=datetime.datetime.now()))
                         print(f"TTS procesado y reproducido correctamente")
                 else:
                     queue_position = tts_queue.qsize() - 1
-                    await interaction.edit_original_response(embed=discord.Embed(title=f'TTS agregado a la cola', color=0XBABBE1, timestamp=datetime.datetime.now()).set_footer(text=f'Tu solicitud de TTS está en la posición {queue_position} de la cola.'))
+                    await interaction.edit_original_response(view=None, embed=discord.Embed(title=f'TTS agregado a la cola', color=0XBABBE1, timestamp=datetime.datetime.now()).set_footer(text=f'Tu solicitud de TTS está en la posición {queue_position} de la cola.'))
                     print(f'TTS agregado a la cola en la posición {queue_position}')
 
     except Exception as e:
         print(f"Ocurrió un error: {str(e)}")
-        await interaction.edit_original_response(embed=discord.Embed(title=f'Ocurrió un error al generar el TTS', color=0X990033))
+        await interaction.edit_original_response(view=None, embed=discord.Embed(title=f'Ocurrió un error al generar el TTS', color=0X990033))
         await voice_client.disconnect()
 
 client.run(discord_token)
