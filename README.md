@@ -19,7 +19,7 @@ git clone https://github.com/ImPavloh/cpu-rvc-tts-discord-bot.git
 
 2. Cambia al directorio del proyecto 📁 
 ```bash
-cd cpu-rvc-tts-discord-bot
+cd rvc-tts-discord-bot
 ```
 
 3. Instala las dependencias necesarias 📦
@@ -27,11 +27,18 @@ cd cpu-rvc-tts-discord-bot
 pip install -r requirements.txt
 ```
 
-4. En la carpeta "models" cambia los nombres y agrega tus archivos 📂 
+4. Agrega tus modelos siguiendo el siguiente formato 📂
+```Swift
+└── Models
+    └── NombreModelo
+        └── NombreModelo
+            ├── Archivo.pth
+            └── Archivo.index
+```
 
-5. [Configura el archivo config.ini](#configuración-) ⚙️
+6. Configura el archivo config.ini ⚙️
 
-6. Ejecuta el script principal 🚀
+7. Ejecuta el script principal 🚀
 ```bash
 python voiceit.py
 ```
@@ -66,7 +73,7 @@ Una vez que el bot ha sido invitado a tu servidor de Discord, puedes interactuar
 
 🗂️  `models/`: Carpeta que debe de contener los modelos de voz que se utilizarán para la conversión de texto a voz. Si todo está correcto, el bot detecterá automáticamente los modelos y se generarán unos archivos de información para el programa.
 
-📑  `requirements.txt`: Un archivo que contiene todas las dependencias de Python necesarias para el funcionamiento del bot. Recuerda ejecutar el comando de [dependencias](#dependencias-).
+📑  `requirements.txt`: Archivo que contiene todas las dependencias de Python necesarias para el funcionamiento del bot.
 
 🤖  `bot.py`: Script de Python que describe la funcionalidad del bot utilizando comandos slash.
 
@@ -88,8 +95,8 @@ Todo está optimizado para garantizar el mínimo consumo de memoria RAM y uso de
 
 ## ⚠️ Advertencia
 
-- En caso de no configurar el archivo `config.ini` o haber colocado y editado correctamente los modelos RVC el bot no funcionará.
+En caso de no configurar el archivo `config.ini` o haber colocado y editado correctamente los modelos RVC el bot no funcionará.
 
-## 📝 Licencia y términos de uso
+## 📝 Licencia
 
-Al utilizar este proyecto, aceptas la [licencia](https://github.com/ImPavloh/cpu-rvc-tts-discord-bot/blob/main/LICENSE).
+Al utilizar este proyecto, aceptas la [licencia](https://github.com/ImPavloh/rvc-tts-discord-bot/blob/main/LICENSE).
