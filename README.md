@@ -5,7 +5,7 @@
 <a href="https://github.com/ImPavloh/cpu-rvc-tts-discord-bot" target="_blank"><img src="https://img.shields.io/github/license/impavloh/cpu-rvc-tts-discord-bot?style=for-the-badge&logo=github&logoColor=white"></a>
 <a href="https://twitter.com/ImPavloh" target="_blank"><img src="https://img.shields.io/badge/Pavloh-%231DA1F2.svg?style=for-the-badge&logo=twitter&logoColor=white"></a>
 
-<h1>RVC Discord Bot 🤖🎙️💬</h1>
+<h1>🎙️ RVC TTS ~ A Discord bot 🤖💬</h1>
 </div>
 
 Bot de texto a voz avanzado para servidores de Discord utilizando modelos de voz basados en Inteligencia Artificial.
@@ -92,4 +92,4 @@ Todo está optimizado para garantizar el mínimo consumo de memoria RAM y uso de
 
 ## 📝 Licencia y términos de uso
 
-Al utilizar este proyecto, aceptas la [licencia](https://github.com/ImPavloh/cpu-rvc-tts-discord-bot/blob/main/LICENSE.
+Al utilizar este proyecto, aceptas la [licencia](https://github.com/ImPavloh/cpu-rvc-tts-discord-bot/blob/main/LICENSE).
