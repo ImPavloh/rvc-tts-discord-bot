@@ -4,7 +4,7 @@ import warnings
 warnings.filterwarnings(action='ignore',module='.*paramiko.*')
 for logger_name in ("paramiko", "xformers", "fairseq", "discord.client", "discord.gateway", "discord.voice_client", "discord.player"): logging.getLogger(logger_name).setLevel(logging.ERROR)
 
-print("RVC TTS Discord Bot  -  @impavloh")
+print("RVC TTS | A Discord bot ~ @impavloh")
 print("-------------------------------------")
 print("Cargando configuración y modelos")
 
@@ -79,8 +79,7 @@ def generate_model_info_files():
             regenerate_model_info = False
             model_info_path = os.path.join(model_directory, category_name, 'model_info.json')
             if os.path.exists(model_info_path):
-                with open(model_info_path, 'r') as f:
-                    existing_model_info = json.load(f)
+                with open(model_info_path, 'r') as f: existing_model_info = json.load(f)
             else:
                 existing_model_info = None
                 regenerate_model_info = True
@@ -98,8 +97,7 @@ def generate_model_info_files():
                         
                         if existing_model_info is None or model_name not in existing_model_info or \
                            existing_model_info[model_name]['model_path_checksum'] != pth_checksum or \
-                           existing_model_info[model_name]['index_path_checksum'] != index_checksum:
-                            regenerate_model_info = True
+                           existing_model_info[model_name]['index_path_checksum'] != index_checksum: regenerate_model_info = True
 
                         model_info[model_name] = {
                             "title": model_name,
@@ -110,12 +108,10 @@ def generate_model_info_files():
                         }
 
             if regenerate_model_info:
-                with open(os.path.join(model_directory, category_name, 'model_info.json'), 'w') as f:
-                    json.dump(model_info, f, indent=4)
+                with open(os.path.join(model_directory, category_name, 'model_info.json'), 'w') as f: json.dump(model_info, f, indent=4)
 
     folder_info_path = os.path.join(model_directory, 'folder_info.json')
-    with open(folder_info_path, 'w') as f:
-        json.dump(folder_info, f, indent=4)
+    with open(folder_info_path, 'w') as f: json.dump(folder_info, f, indent=4)
 
 generate_model_info_files()
 
@@ -124,8 +120,7 @@ options = []
 
 model_info_files = glob.glob('models/**/model_info.json', recursive=True)
 for model_info_file in model_info_files:
-    with open(model_info_file, 'r') as f:
-        model_info = json.load(f)
+    with open(model_info_file, 'r') as f: model_info = json.load(f)
     for model_name in model_info:
         allowed_voices[model_name] = (model_name, model_name)
         options.append(discord.SelectOption(label=model_name, emoji='📦'))
@@ -141,7 +136,6 @@ def create_vc_fn(model_title, tgt_sr, net_g, vc, if_f0, version, file_index):
         try:
             with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmpfile:
                 tts_mp3_filename = tmpfile.name
-
                 if tts_type == "elevenlabs":
                     url = "https://api.elevenlabs.io/v1/text-to-speech/VR6AewLTigWG4xSOukaG"
                     d = {"text": tts_text, "model_id": modelid, "voice_settings": { "stability": 0.75, "similarity_boost": 1}}
@@ -149,37 +143,28 @@ def create_vc_fn(model_title, tgt_sr, net_g, vc, if_f0, version, file_index):
                     response = requests.post(url, json=d, headers=h)
                     tmpfile.write(response.content)
                     tmpfile.seek(0)
-                else:
-                    asyncio.run(edge_tts.Communicate(tts_text, "-".join(tts_voice.split('-')[:-1])).save(tts_mp3_filename))
-
+                else: asyncio.run(edge_tts.Communicate(tts_text, "-".join(tts_voice.split('-')[:-1])).save(tts_mp3_filename))
                 audio, sr = librosa.load(tts_mp3_filename, sr=16000, mono=True)
-
             audio_opt = vc.pipeline(hubert_model, net_g, 0, audio, tts_mp3_filename, [0, 0, 0], -1, "pm", file_index, 0.7, if_f0, 3, tgt_sr, 0, 1, version, 0.5, f0_file=None)
             os.remove(tts_mp3_filename)
-            if audio_opt is None:
-                return None
+            if audio_opt is None: return None
             return (tgt_sr, audio_opt)
-        except:
-            return None
+        except: return None
     return vc_fn
 
 def load_specific_model(target_category_name, target_model_name):
     global categories
     categories = []
     categories.clear()
-    with open("models/folder_info.json", "r", encoding="utf-8") as f:
-        folder_info = json.load(f)
+    with open("models/folder_info.json", "r", encoding="utf-8") as f: folder_info = json.load(f)
     for category_name, category_info in folder_info.items():
-        if category_name != target_category_name:
-            continue
+        if category_name != target_category_name: continue
         category_title = category_info['title']
         category_folder = category_info['folder_path']
         models = []
-        with open(f"models/{category_folder}/model_info.json", "r", encoding="utf-8") as f:
-            models_info = json.load(f)
+        with open(f"models/{category_folder}/model_info.json", "r", encoding="utf-8") as f: models_info = json.load(f)
         for character_name, info in models_info.items():
-            if character_name != target_model_name:
-                continue
+            if character_name != target_model_name: continue
             models = load_model_data(category_folder, character_name, info)
         categories.append([category_title, category_folder, models])
     return categories
@@ -197,10 +182,8 @@ def load_model_data(category_folder, character_name, info):
     del net_g.enc_q
     net_g.load_state_dict(cpt["weight"], strict=False)
     net_g.eval().to(config.device)
-    if config.is_half:
-        net_g = net_g.half()
-    else:
-        net_g = net_g.float()
+    if config.is_half: net_g = net_g.half()
+    else: net_g = net_g.float()
     vc = VC(tgt_sr, config)
     print(f"Modelo {character_name} RVC ({version.upper()}) cargado")
     return [(character_name, model_title, version.upper(), create_vc_fn(model_title, tgt_sr, net_g, vc, if_f0, version, model_index))]
@@ -237,7 +220,7 @@ async def play_audio(voice_client):
     while not tts_queue.empty():
         output_filename, audio_data, sample_rate = tts_queue.get()
         audio_source = discord.FFmpegPCMAudio(executable="ffmpeg", source=output_filename)
-        audio_source = discord.PCMVolumeTransformer(audio_source, volume=0.8)
+        audio_source = discord.PCMVolumeTransformer(audio_source, volume=0.7)
 
         voice_client.play(audio_source, after=after_play)
 
@@ -304,7 +287,7 @@ async def ayuda(interaction: discord.Interaction):
     embed.set_footer(text="RVC TTS Discord Bot  -  @impavloh")
     view = discord.ui.View()
     view.add_item(discord.ui.Button(label='Twitter', style=discord.ButtonStyle.blurple, url='https://twitter.com/impavloh'))
-    view.add_item(discord.ui.Button(label='GitHub', style=discord.ButtonStyle.link, url='https://github.com/impavloh'))
+    view.add_item(discord.ui.Button(label='GitHub', style=discord.ButtonStyle.link, url='https://github.com/ImPavloh/rvc-tts-discord-bot'))
     await interaction.response.send_message(content=interaction.user.mention, embed=embed, view=view)
 
 class CommandDropdownView(discord.ui.View):
@@ -388,8 +371,7 @@ async def tts(interaction, mensaje: str):
             print(f'Procesando TTS con la voz de {folder_title}')
             for character_name, model_title, model_version, vc_fn in models:
                 sample_rate, audio_data = await get_vc_fn_result(vc_fn, sanitized_text)
-                with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmpfile:
-                    output_filename = tmpfile.name
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmpfile: output_filename = tmpfile.name
                 with wave.open(output_filename, "wb") as wav_file:
                     wav_file.setnchannels(1)
                     wav_file.setsampwidth(2)
