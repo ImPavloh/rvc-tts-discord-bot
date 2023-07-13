@@ -14,7 +14,7 @@ Bot de texto a voz avanzado para servidores de Discord utilizando modelos de voz
 
 1. Clona el repositorio 🗂️ 
 ```bash
-git clone https://github.com/ImPavloh/cpu-rvc-tts-discord-bot.git
+git clone https://github.com/ImPavloh/rvc-tts-discord-bot.git
 ```
 
 2. Cambia al directorio del proyecto 📁 
