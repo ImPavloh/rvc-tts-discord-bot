@@ -5,29 +5,29 @@
 <a href="https://github.com/ImPavloh/cpu-rvc-tts-discord-bot" target="_blank"><img src="https://img.shields.io/github/license/impavloh/cpu-rvc-tts-discord-bot?style=for-the-badge&logo=github&logoColor=white"></a>
 <a href="https://twitter.com/ImPavloh" target="_blank"><img src="https://img.shields.io/badge/Pavloh-%231DA1F2.svg?style=for-the-badge&logo=twitter&logoColor=white"></a>
 
-<h1>🎙️ RVC TTS ~ A Discord bot 🤖💬</h1>
+<h1>🎙️ RVC TTS: An AI-Powered Text-to-Speech Discord Bot 🤖💬</h1>
+<h3>User-friendly  |  Multi-Language Support  |  Easily Configurable</h3>
+
 </div>
 
-Bot de texto a voz avanzado para servidores de Discord utilizando modelos de voz basados en Inteligencia Artificial.
+## 🛠️ Installation
 
-## 🛠️ Instalación
-
-1. Clona el repositorio 🗂️ 
+1. Clone the repository 🗂️ 
 ```bash
 git clone https://github.com/ImPavloh/rvc-tts-discord-bot.git
 ```
 
-2. Cambia al directorio del proyecto 📁 
+2. Install the necessary dependencies 📦
 ```bash
 cd rvc-tts-discord-bot
 ```
 
-3. Instala las dependencias necesarias 📦
+3. Install the necessary dependencies 📦
 ```bash
 pip install -r requirements.txt
 ```
 
-4. Agrega tus modelos siguiendo el siguiente formato 📂
+4. Add your models following the next format 📂
 ```Swift
 └── Models
     └── NombreModelo
@@ -36,67 +36,71 @@ pip install -r requirements.txt
             └── Archivo.index
 ```
 
-6. Configura el archivo config.ini ⚙️
+6. Configure the config.ini file ⚙️
 
-7. Ejecuta el script principal 🚀
+7. Run the main script 🚀
 ```bash
 python voiceit.py
 ```
 
-## 📝 Comandos 
+## 📝 Commands 
 
-Una vez que el bot ha sido invitado a tu servidor de Discord, puedes interactuar con él utilizando los siguientes comandos:
+Once the bot has been invited to your Discord server, you can interact with it using the following commands:
 
-🗣️ Convierte el texto en voz y lo reproduce en el canal de voz.
+🗣️ Converts text into speech and plays it in the voice channel.
 ```python
-/tts <mensaje>
+/tts <message>
 ```
 
-🔗 Conecta o mueve el bot al canal de voz en el que te encuentres.
+🔗 Connects or moves the bot to the voice channel you are in.
 ```python
-/conectar
+/connect
 ```
 
-🔌 Desconecta el bot del canal de voz. 
+🔌 Disconnects the bot from the voice channel.
 ```python
-/desconectar
+/disconnect
 ```
 
-❓ Muestra todos los comandos del bot.
+🌍 Changes TTS and bot language
 ```python
-/ayuda
+/language
 ```
 
-## 📄 Archivos importantes
+❓ Displays all the bot commands.
+```python
+/help
+```
 
-⚙️  `config.ini`: Archivo de configuración que almacena información clave, como el [token de Discord](https://discord.com/developers/applications) del bot y la clave API de [ElevenLabs](https://elevenlabs.io). Cambia los datos antes de ejecutar el bot.
+## 📄 Important Files
 
-🗂️  `models/`: Carpeta que debe de contener los modelos de voz que se utilizarán para la conversión de texto a voz. Si todo está correcto, el bot detecterá automáticamente los modelos y se generarán unos archivos de información para el programa.
+⚙️  `config.ini`: Configuration file that stores key information, such as the language, the bot's [Discord token](https://discord.com/developers/applications) and [ElevenLabs](https://elevenlabs.io) API key. Change the data before running the bot.
 
-📑  `requirements.txt`: Archivo que contiene todas las dependencias de Python necesarias para el funcionamiento del bot.
+🗂️  `models/`: Folder that should contain the voice models that will be used for text-to-speech conversion. If everything is correct, the bot will automatically detect the models and information files for the program will be generated.
 
-🤖  `bot.py`: Script de Python que describe la funcionalidad del bot utilizando comandos slash.
+📑  `requirements.txt`: File containing all the Python dependencies needed for the bot to function.
 
-## ⚙️ Configuración
+🤖  `bot.py`: Python script that describes the bot's functionality using slash commands. This will start the bot with the configuration and models.
 
-Para configurar el bot, debes editar el archivo ***[config.ini](https://github.com/ImPavloh/cpu-rvc-tts-discord-bot/blob/main/config.ini)*** y rellenar la información correspondiente:
+## ⚙️ Configuration
 
-- `[discord] token`: Debes de poner el token de tu bot de Discord. Puedes obtener un token creando una nueva aplicación en el [portal de desarrolladores de Discord](https://discord.com/developers/applications)
-- `[discord] type_activity` y `activity`: Estos campos son utilizados para establecer el estado del bot.
-- `[tts] type_tts`: Este parámetro establece el tipo de Texto a Voz (TTS) que se utilizará. Puede ser "edge_tts" o "elevenlabs".
-- `[edge_tts] voice`: Si eliges "edge_tts" como tu TTS, este campo determinará la voz utilizada para el TTS.
-- `[elevenlabs] api_key` y `model_id`: Si eliges "elevenlabs" como tu TTS, necesitarás proporcionar tu clave API de ElevenLabs y el ID del modelo que deseas utilizar.
+To configure the bot, you must edit the ***[config.ini](https://github.com/ImPavloh/cpu-rvc-tts-discord-bot/blob/main/config.ini)*** file and fill in the relevant information:
 
-Esto iniciará el bot y estará listo para interactuar en tu servidor de Discord.
+- `[discord] token`: You have to put your Discord bot token here. You can get a token by creating a new application in the [Discord developer portal](https://discord.com/developers/applications)
+- `[discord] type_activity` and `activity`: These fields are used to set the bot's status.
+- `[discord] language`: Set the bot and edge_TTS language.
+- `[tts] type_tts`: This parameter sets the type of Text-to-Speech (TTS) to be used. It can be "edge_tts" or "elevenlabs".
+- `[edge_tts] voice`: If you choose "edge_tts" as your TTS, this field will determine the voice used for the TTS.
+- `[elevenlabs] api_key` and `model_id`: If you choose "elevenlabs" as your TTS, you will need to provide your ElevenLabs API key and the model ID you wish to use.
 
-## ⚡ Optimizaciones
+## ⚡ Optimizations
 
-Todo está optimizado para garantizar el mínimo consumo de memoria RAM y uso de CPU. Además, la conversación del audio emplea el método "PM", que es el más rápido y solo requiere una CPU, sin necesidad de una GPU. Esto facilita la ejecución del bot en prácticamente cualquier dispositivo/servidor.
+Everything is optimized to ensure minimal RAM and CPU usage. The audio conversion uses the "PM" method, which is the fastest and only requires a CPU, without the need for a GPU. This makes running the bot on virtually any device/server possible.
 
-## ⚠️ Advertencia
+## ⚠️ Warning
 
-En caso de no configurar el archivo `config.ini` o haber colocado y editado correctamente los modelos RVC el bot no funcionará.
+In case the `config.ini` file is not configured or the RVC models are not properly placed, the bot won't work.
 
-## 📝 Licencia
+## 📝 License
 
-Al utilizar este proyecto, aceptas la [licencia](https://github.com/ImPavloh/rvc-tts-discord-bot/blob/main/LICENSE).
+By using this project, you agree to the [license](https://github.com/ImPavloh/rvc-tts-discord-bot/blob/main/LICENSE).
