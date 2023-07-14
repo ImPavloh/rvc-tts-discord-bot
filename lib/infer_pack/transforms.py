@@ -21,8 +21,7 @@ def searchsorted(bin_locations, inputs, eps=1e-6):
     return torch.sum(inputs[..., None] >= bin_locations, dim=-1) - 1
 
 def unconstrained_rational_quadratic_spline(inputs, unnormalized_widths, unnormalized_heights, unnormalized_derivatives, inverse=False, tails="linear", tail_bound=1.0, min_bin_width=DEFAULT_MIN_BIN_WIDTH, min_bin_height=DEFAULT_MIN_BIN_HEIGHT, min_derivative=DEFAULT_MIN_DERIVATIVE):
-    if tails != "linear":
-        raise RuntimeError("{} tails are not implemented.".format(tails))
+    if tails != "linear": raise RuntimeError(f"{tails} tails are not implemented.")
 
     unnormalized_derivatives = F.pad(unnormalized_derivatives, pad=(1, 1))
     constant = np.log(np.exp(1 - min_derivative) - 1)
@@ -50,10 +49,8 @@ def unconstrained_rational_quadratic_spline(inputs, unnormalized_widths, unnorma
 def rational_quadratic_spline(inputs, unnormalized_widths, unnormalized_heights, unnormalized_derivatives, inverse=False, left=0.0, right=1.0, bottom=0.0, top=1.0, min_bin_width=DEFAULT_MIN_BIN_WIDTH, min_bin_height=DEFAULT_MIN_BIN_HEIGHT, min_derivative=DEFAULT_MIN_DERIVATIVE):
     num_bins = unnormalized_widths.shape[-1]
 
-    if min_bin_width * num_bins > 1.0:
-        raise ValueError("Minimal bin width too large for the number of bins")
-    if min_bin_height * num_bins > 1.0:
-        raise ValueError("Minimal bin height too large for the number of bins")
+    if min_bin_width * num_bins > 1.0: raise ValueError("Minimal bin width too large for the number of bins")
+    if min_bin_height * num_bins > 1.0: raise ValueError("Minimal bin height too large for the number of bins")
 
     widths, heights = compute_widths_and_heights(unnormalized_widths, unnormalized_heights, min_bin_width, min_bin_height, num_bins, left, right, bottom, top)
     cumwidths, cumheights = widths.cumsum(dim=-1), heights.cumsum(dim=-1)
@@ -65,20 +62,16 @@ def rational_quadratic_spline(inputs, unnormalized_widths, unnormalized_heights,
 
     derivatives = min_derivative + F.softplus(unnormalized_derivatives)
 
-    if inverse:
-        bin_idx = searchsorted(cumheights, inputs)[..., None]
-    else:
-        bin_idx = searchsorted(cumwidths, inputs)[..., None]
+    if inverse: bin_idx = searchsorted(cumheights, inputs)[..., None]
+    else: bin_idx = searchsorted(cumwidths, inputs)[..., None]
 
     gather_args = (-1, bin_idx)
     input_cumwidths, input_bin_widths, input_cumheights, input_delta, input_derivatives, input_derivatives_plus_one, input_heights = map(
         lambda tensor: tensor.gather(*gather_args)[..., 0],
         (cumwidths, widths, cumheights, heights / widths, derivatives, derivatives[..., 1:], heights))
 
-    if inverse:
-        outputs, logabsdet = inverse_rational_quadratic_spline(inputs, input_cumheights, input_heights, input_derivatives, input_derivatives_plus_one, input_delta, input_bin_widths, input_cumwidths)
-    else:
-        outputs, logabsdet = direct_rational_quadratic_spline(inputs, input_cumwidths, input_bin_widths, input_cumheights, input_heights, input_derivatives, input_derivatives_plus_one, input_delta)
+    if inverse: outputs, logabsdet = inverse_rational_quadratic_spline(inputs, input_cumheights, input_heights, input_derivatives, input_derivatives_plus_one, input_delta, input_bin_widths, input_cumwidths)
+    else: outputs, logabsdet = direct_rational_quadratic_spline(inputs, input_cumwidths, input_bin_widths, input_cumheights, input_heights, input_derivatives, input_derivatives_plus_one, input_delta)
 
     return outputs, logabsdet
 
