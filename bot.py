@@ -296,9 +296,15 @@ class LanguageDropdown(discord.ui.Select):
 
     async def callback(self, interaction: discord.Interaction):
         global current_language
+        global tts_voice
 
         current_language = interaction.data['values'][0]
         load_language_data()
+        if current_language == "es": tts_voice = "es-ES-AlvaroNeural-Male"
+        elif current_language == "pt": tts_voice = "pt-PT-DuarteNeural-Male"
+        elif current_language == "de": tts_voice = "de-AT-JonasNeural-Male"
+        elif current_language == "fr": tts_voice = "fr-FR-HenriNeural-Male"
+        elif current_language == "en": tts_voice = "en-US-GuyNeural-Male"
         await interaction.response.send_message(embed=discord.Embed(title=language_data["language_changed"].format(new_language=current_language), color=0XBABBE1), ephemeral=True)
 
 @tree.command(name="language", description=language_data["change_language_command_description"])
