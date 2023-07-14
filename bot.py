@@ -1,17 +1,25 @@
+import os
+import json
 import logging
 import warnings
 
 warnings.filterwarnings(action='ignore',module='.*paramiko.*')
-for logger_name in ("paramiko", "xformers", "fairseq", "discord.client", "discord.gateway", "discord.voice_client", "discord.player"): logging.getLogger(logger_name).setLevel(logging.ERROR)
 
-print("RVC TTS | A Discord bot ~ @impavloh")
+current_language = "en"
+def load_language_data():
+    global language_data
+    with open(os.path.join(os.path.dirname(__file__), "locales", f"{current_language}.json"), "r", encoding="utf-8") as lang_file: 
+        language_data = json.load(lang_file)
+load_language_data()
+
+for logger_name in ("paramiko", "xformers", "fairseq", "discord.client", "discord.gateway", "discord.voice_client", "discord.player"):logging.getLogger(logger_name).setLevel(logging.ERROR)
+
+print("RVC TTS Discord Bot  -  @impavloh")
 print("-------------------------------------")
-print("Cargando configuración y modelos")
+print(language_data["loading"])
 
-import os
 import sys
 import glob
-import json
 import wave
 import queue
 import torch
@@ -40,14 +48,12 @@ try:
     apikey = configdata.get('elevenlabs', 'api_key')
     modelid = configdata.get('elevenlabs', 'model_id')
     tts_type = configdata.get('tts', 'type_tts')
-except configparser.NoSectionError as e:
-    print(f"Error al cargar la configuración: {e}")
+except configparser.NoSectionError:
+    print(language_data["error_config"])
     sys.exit(1)
 
-if tts_type == "elevenlabs":
-    import requests
-else:
-    import edge_tts
+if tts_type == "elevenlabs": import requests
+else: import edge_tts
 
 config = config.Config()
 
@@ -62,53 +68,55 @@ def file_checksum(file_path):
         file_data = f.read()
         return hashlib.md5(file_data).hexdigest()
 
+def get_existing_model_info(category_directory):
+    model_info_path = os.path.join(category_directory, 'model_info.json')
+    if os.path.exists(model_info_path):
+        with open(model_info_path, 'r') as f: return json.load(f)
+    return None
+
+def get_model_files(model_path):
+    return [f for f in os.listdir(model_path) if f.endswith('.pth') or f.endswith('.index')]
+
+def should_regenerate_model_info(existing_model_info, model_name, pth_checksum, index_checksum):
+    if existing_model_info is None or model_name not in existing_model_info: return True
+    return (existing_model_info[model_name]['model_path_checksum'] != pth_checksum or existing_model_info[model_name]['index_path_checksum'] != index_checksum)
+
+def gather_model_info(category_directory, model_name, model_path, existing_model_info):
+    model_files = get_model_files(model_path)
+    if len(model_files) != 2: return None, False
+
+    pth_file = [f for f in model_files if f.endswith('.pth')][0]
+    index_file = [f for f in model_files if f.endswith('.index')][0]
+    pth_checksum = file_checksum(os.path.join(model_path, pth_file))
+    index_checksum = file_checksum(os.path.join(model_path, index_file))
+    regenerate = should_regenerate_model_info(existing_model_info, model_name, pth_checksum, index_checksum)
+
+    return {"title": model_name, "model_path": pth_file, "feature_retrieval_library": index_file, "model_path_checksum": pth_checksum, "index_path_checksum": index_checksum}, regenerate
+
 def generate_model_info_files():
-    print("Generando archivos de información del modelo")
+    print(language_data["model_info_generation"])
     folder_info = {}
     model_directory = "models/"
-
     for category_name in os.listdir(model_directory):
         category_directory = os.path.join(model_directory, category_name)
-        if os.path.isdir(category_directory):
-            folder_info[category_name] = {
-                "title": category_name,
-                "folder_path": category_name
-            }
+        if not os.path.isdir(category_directory): continue
 
-            model_info = {}
-            regenerate_model_info = False
-            model_info_path = os.path.join(model_directory, category_name, 'model_info.json')
-            if os.path.exists(model_info_path):
-                with open(model_info_path, 'r') as f: existing_model_info = json.load(f)
-            else:
-                existing_model_info = None
-                regenerate_model_info = True
+        folder_info[category_name] = {"title": category_name, "folder_path": category_name}
+        existing_model_info = get_existing_model_info(category_directory)
+        model_info = {}
+        regenerate_model_info = False
 
-            for model_name in os.listdir(category_directory):
-                model_path = os.path.join(category_directory, model_name)
-                if os.path.isdir(model_path):
-                    model_files = os.listdir(model_path)
-                    model_files = [f for f in model_files if f.endswith('.pth') or f.endswith('.index')]
-                    if len(model_files) == 2:
-                        pth_file = [f for f in model_files if f.endswith('.pth')][0]
-                        index_file = [f for f in model_files if f.endswith('.index')][0]
-                        pth_checksum = file_checksum(os.path.join(model_path, pth_file))
-                        index_checksum = file_checksum(os.path.join(model_path, index_file))
-                        
-                        if existing_model_info is None or model_name not in existing_model_info or \
-                           existing_model_info[model_name]['model_path_checksum'] != pth_checksum or \
-                           existing_model_info[model_name]['index_path_checksum'] != index_checksum: regenerate_model_info = True
+        for model_name in os.listdir(category_directory):
+            model_path = os.path.join(category_directory, model_name)
+            if not os.path.isdir(model_path): continue
 
-                        model_info[model_name] = {
-                            "title": model_name,
-                            "model_path": pth_file,
-                            "feature_retrieval_library": index_file,
-                            "model_path_checksum": pth_checksum,
-                            "index_path_checksum": index_checksum
-                        }
+            model_data, regenerate = gather_model_info(category_directory, model_name, model_path, existing_model_info)
+            if model_data is not None:
+                model_info[model_name] = model_data
+                regenerate_model_info |= regenerate
 
-            if regenerate_model_info:
-                with open(os.path.join(model_directory, category_name, 'model_info.json'), 'w') as f: json.dump(model_info, f, indent=4)
+        if regenerate_model_info:
+            with open(os.path.join(category_directory, 'model_info.json'), 'w') as f: json.dump(model_info, f, indent=4)
 
     folder_info_path = os.path.join(model_directory, 'folder_info.json')
     with open(folder_info_path, 'w') as f: json.dump(folder_info, f, indent=4)
@@ -126,7 +134,6 @@ for model_info_file in model_info_files:
         options.append(discord.SelectOption(label=model_name, emoji='📦'))
 
 first_model_name = list(allowed_voices.keys())[0]
-
 target_category_name = first_model_name
 target_model_name = first_model_name
 current_voice = first_model_name
@@ -147,9 +154,8 @@ def create_vc_fn(model_title, tgt_sr, net_g, vc, if_f0, version, file_index):
                 audio, sr = librosa.load(tts_mp3_filename, sr=16000, mono=True)
             audio_opt = vc.pipeline(hubert_model, net_g, 0, audio, tts_mp3_filename, [0, 0, 0], -1, "pm", file_index, 0.7, if_f0, 3, tgt_sr, 0, 1, version, 0.5, f0_file=None)
             os.remove(tts_mp3_filename)
-            if audio_opt is None: return None
-            return (tgt_sr, audio_opt)
-        except: return None
+            return None if audio_opt is None else (tgt_sr, audio_opt)
+        except Exception: return None
     return vc_fn
 
 def load_specific_model(target_category_name, target_model_name):
@@ -182,10 +188,9 @@ def load_model_data(category_folder, character_name, info):
     del net_g.enc_q
     net_g.load_state_dict(cpt["weight"], strict=False)
     net_g.eval().to(config.device)
-    if config.is_half: net_g = net_g.half()
-    else: net_g = net_g.float()
+    net_g = net_g.half() if config.is_half else net_g.float()
     vc = VC(tgt_sr, config)
-    print(f"Modelo {character_name} RVC ({version.upper()}) cargado")
+    print(language_data["model_loaded"].format(character_name=character_name, version=version))
     return [(character_name, model_title, version.upper(), create_vc_fn(model_title, tgt_sr, net_g, vc, if_f0, version, model_index))]
 
 def load_model_net_g(cpt, if_f0, version):
@@ -202,12 +207,10 @@ def load_hubert():
     models, _, _ = checkpoint_utils.load_model_ensemble_and_task(["hubert_base.pt"], suffix="")
     hubert_model = models[0]
     hubert_model = hubert_model.to(config.device)
-    if config.is_half: hubert_model = hubert_model.half()
-    else: hubert_model = hubert_model.float()
+    hubert_model = hubert_model.half() if config.is_half else hubert_model.float()
     hubert_model.eval()
 
-def remove_special_characters(text):
-    return ''.join(c for c in text if not unicodedata.category(c).startswith('So'))
+def remove_special_characters(text): return ''.join(c for c in text if not unicodedata.category(c).startswith('So'))
 
 async def play_audio(voice_client):
     global is_playing_audio, tts_queue
@@ -221,15 +224,12 @@ async def play_audio(voice_client):
         output_filename, audio_data, sample_rate = tts_queue.get()
         audio_source = discord.FFmpegPCMAudio(executable="ffmpeg", source=output_filename)
         audio_source = discord.PCMVolumeTransformer(audio_source, volume=0.7)
-
         voice_client.play(audio_source, after=after_play)
-
         num_frames = len(audio_data) // 2
         duration = num_frames / sample_rate
         await asyncio.sleep(duration + 1)
 
     is_playing_audio = False
-
     return audio_started
 
 async def run_in_executor(func, *args):
@@ -243,52 +243,69 @@ async def get_vc_fn_result(vc_fn, text):
 
 load_hubert()
 categories = load_specific_model(target_category_name, target_model_name)
-print("Iniciando bot")
+models = categories[0][2]
+print(language_data["bot_started"])
 
 @client.event
 async def on_ready():
     await tree.sync()
-    print(f"Bot en línea como \"{client.user.name}\"") 
+    print(language_data["bot_online"].format(client_user_name=client.user.name))
     activity = discord.Game(name=bot_activity, type=bot_type_activity)
     await client.change_presence(status=discord.Status.online, activity=activity)
 
-@tree.command(name="conectar", description="Conecta el bot al canal de voz en el que te encuentres")
+@tree.command(name="join", description=language_data["command_connect_description"])
 async def conectar(interaction: discord.Interaction):
     if interaction.user.voice is not None:
         voice_channel = interaction.user.voice.channel
-        if interaction.guild.voice_client is not None:
-            if interaction.guild.voice_client.channel != voice_channel:
-                await interaction.guild.voice_client.disconnect()
-                await voice_channel.connect()
-                await interaction.response.send_message(embed=discord.Embed(title=f'Me he movido al canal de voz {voice_channel.mention}', color=0XBABBE1), ephemeral=True)
-            else:
-                await interaction.response.send_message(embed=discord.Embed(title=f'Ya estoy conectado al canal de voz {voice_channel.mention}', color=0XBABBE1), ephemeral=True)
-        else:
+        if interaction.guild.voice_client is None:
             await voice_channel.connect()
-            await interaction.response.send_message(embed=discord.Embed(title=f'Me he conectado al canal de voz {voice_channel.mention}', color=0XBABBE1), ephemeral=True)
-    else: await interaction.response.send_message(embed=discord.Embed(title=f'No estás en un canal de voz, únete a uno para que pueda conectarme.', color=0XBABBE1), ephemeral=True)
+            await interaction.response.send_message(embed=discord.Embed(title=language_data["bot_connected_to_voice_channel"].format(voice_channel=voice_channel), color=0XBABBE1), ephemeral=True)
+        elif interaction.guild.voice_client.channel != voice_channel:
+            await interaction.guild.voice_client.disconnect()
+            await voice_channel.connect()
+            await interaction.response.send_message(embed=discord.Embed(title=language_data["bot_moved_to_voice_channel"].format(voice_channel=voice_channel), color=0XBABBE1), ephemeral=True)
+        else: await interaction.response.send_message(embed=discord.Embed(title=language_data["bot_already_in_voice_channel"].format(voice_channel=voice_channel), color=0XBABBE1), ephemeral=True)
+    else: await interaction.response.send_message(embed=discord.Embed(title=language_data["user_not_in_voice_channel"], color=0xBABBE1), ephemeral=True)
 
-@tree.command(name="desconectar", description="Desconecta el bot del canal donde se encuentre")
+@tree.command(name="leave", description=language_data["command_disconnect_description"])
 async def salir(interaction: discord.Interaction):
     voice_client = interaction.guild.voice_client
     if not voice_client:
-        await interaction.response.send_message(embed=discord.Embed(title=f'No estoy conectado a un canal de voz', color=0XBABBE1), ephemeral=True)
+        await interaction.response.send_message(embed=discord.Embed(title=language_data['bot_not_in_voice_channel'], color=0XBABBE1), ephemeral=True)
         return
     await voice_client.disconnect()
-    await interaction.response.send_message(embed=discord.Embed(title=f'Me he desconectado del canal de voz', color=0XBABBE1), ephemeral=True)
+    await interaction.response.send_message(embed=discord.Embed(title=language_data['bot_disconnected_from_voice_channel'], color=0XBABBE1), ephemeral=True)
 
-@tree.command(name="ayuda", description="Muestra una lista con todos los comandos del bot")
+@tree.command(name="help", description=language_data["help_command_description"])
 async def ayuda(interaction: discord.Interaction):
-    embed = discord.Embed(title="🎤  TTS + IA 🔊 ", color=0XBABBE1, timestamp=datetime.datetime.now())
-    embed.add_field(name=":loud_sound: Comando TTS", value="`/tts <mensaje>`: Convierte texto a voz y reprodúcelo en el canal de voz", inline=False)
-    embed.add_field(name=":speaker: Comandos del canal de voz", value="`/conectar`: Conecta/mueve el bot al canal\n" "`/desconectar`: Desconecta el bot del canal", inline=False)
-    embed.add_field(name=":microphone2: Cambiar voz", value="`/voz`: Cambia la voz del TTS a la voz especificada.", inline=False)
-    embed.add_field(name=":question: Comandos extra", value="`/ayuda`: Muestra este mensaje de ayuda", inline=False)
-    embed.set_footer(text="RVC TTS Discord Bot  -  @impavloh")
+    embed = discord.Embed(title=f"🎤  {language_data['dialog_title']} 🔊 ", color=0XBABBE1, timestamp=datetime.datetime.now())
+    embed.add_field(name=f":loud_sound: {language_data['dialog_tts_command']}", value=f"`/tts <message>`: {language_data['tts_command_description']}", inline=False)
+    embed.add_field(name=f":speaker: {language_data['dialog_voice_command']}", value=f"`/join`: {language_data['command_connect_description']}\n" f"`/leave`: {language_data['command_disconnect_description']}", inline=False)
+    embed.add_field(name=f":microphone2: {language_data['dialog_change_voice']}", value=f"`/voice`: {language_data['voice_command_description']}", inline=False)
+    embed.add_field(name=f":question: {language_data['dialog_extra_commands']}", value=f"`/help`: {language_data['help_command_description']}", inline=False)
+    embed.set_footer(text="RVC TTS Discord Bot • @impavloh ")
     view = discord.ui.View()
     view.add_item(discord.ui.Button(label='Twitter', style=discord.ButtonStyle.blurple, url='https://twitter.com/impavloh'))
     view.add_item(discord.ui.Button(label='GitHub', style=discord.ButtonStyle.link, url='https://github.com/ImPavloh/rvc-tts-discord-bot'))
-    await interaction.response.send_message(content=interaction.user.mention, embed=embed, view=view)
+    await interaction.response.send_message(embed=embed, view=view)
+
+class LanguageDropdown(discord.ui.Select):
+    def __init__(self):
+        options = [discord.SelectOption(label="English", emoji='🇺🇸', value="en"), discord.SelectOption(label="Español", emoji='🇪🇸', value="es"), discord.SelectOption(label="Français", emoji='🇫🇷', value="fr"), discord.SelectOption(label="Deutsch", emoji='🇩🇪', value="ge"), discord.SelectOption(label="Português", emoji='🇵🇹', value="pt")]
+        super().__init__(placeholder=language_data["language_select"], min_values=1, max_values=1, options=options)
+
+    async def callback(self, interaction: discord.Interaction):
+        global current_language
+
+        current_language = interaction.data['values'][0]
+        load_language_data()
+        await interaction.response.send_message(embed=discord.Embed(title=language_data["language_changed"].format(new_language=current_language), color=0XBABBE1), ephemeral=True)
+
+@tree.command(name="language", description=language_data["change_language_command_description"])
+async def language(interaction: discord.Interaction):
+    view = discord.ui.View()
+    view.add_item(LanguageDropdown())
+    await interaction.response.send_message(view=view, ephemeral=True)
 
 class CommandDropdownView(discord.ui.View):
     def __init__(self):
@@ -296,8 +313,7 @@ class CommandDropdownView(discord.ui.View):
         self.add_item(Dropdown())
 
 class Dropdown(discord.ui.Select):
-    def __init__(self):
-        super().__init__(placeholder='Elige un modelo de voz', min_values=1, max_values=1, options=options)
+    def __init__(self): super().__init__(placeholder=language_data['choose_voice'], min_values=1, max_values=1, options=options)
 
     async def callback(self, interaction: discord.Interaction):
         global target_category_name, target_model_name, current_voice
@@ -308,67 +324,58 @@ class Dropdown(discord.ui.Select):
             target_category_name, target_model_name = allowed_voices[selected_voice]
             load_specific_model(target_category_name, target_model_name)
             current_voice = selected_voice
-            print(f'Modelo de voz cambiado a {current_voice}')
-            embed = discord.Embed(title=f'La voz se ha cambiado a {selected_voice}', color=0XBABBE1)
+            print(language_data["model_changed"].format(current_voice=current_voice))
+            embed = discord.Embed(title=language_data['voice_changed'].format(selected_voice=selected_voice) , color=0XBABBE1)
             await interaction.response.send_message(embed=embed)
         else:
-            embed = discord.Embed(title=f'La voz no es válida', color=0XBABBE1)
+            embed = discord.Embed(title=language_data['voice_not_valid'] , color=0XBABBE1)
             await interaction.response.send_message(embed=embed, ephemeral=True)
 
-@tree.command(name="voz", description="Cambia el modelo de voz final del TTS")
+@tree.command(name="voice", description=language_data["voice_command_description"])
 async def voz(interaction: discord.Interaction): 
     global current_voice
 
-    if current_voice is None:
-        await interaction.response.send_message(embed=discord.Embed(title=f'No se ha seleccionado ninguna voz', color=0XBABBE1), view=CommandDropdownView(), ephemeral=True)
-    else:
-        await interaction.response.send_message(embed=discord.Embed(title=f'La voz actual es {current_voice}', color=0XBABBE1), view=CommandDropdownView(), ephemeral=True)
+    if current_voice is None: await interaction.response.send_message(embed=discord.Embed(title=language_data["voice_not"], color=0XBABBE1), view=CommandDropdownView(), ephemeral=True)
+    else: await interaction.response.send_message(embed=discord.Embed(title=language_data["current_voice"].format(current_voice=current_voice), color=0XBABBE1), view=CommandDropdownView(), ephemeral=True)
 
 class BotonesTTS2(discord.ui.View):
     @discord.ui.button(label="▶️", style=discord.ButtonStyle.green)
     async def reanudar(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer()
         interaction.guild.voice_client.resume()
-        await interaction.edit_original_response(view=BotonesTTS(), embed=discord.Embed(title=f'Reproduciendo TTS', color=0X07ce1b, timestamp=datetime.datetime.now()).set_footer(text="TTS reanudado"))
+        await interaction.edit_original_response(view=BotonesTTS(), embed=discord.Embed(title=language_data["tts_playing"], color=0X07ce1b, timestamp=datetime.datetime.now()).set_footer(text=language_data["tts_continue"]))
     @discord.ui.button(label="⏹️", style=discord.ButtonStyle.red)
     async def detener(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer()
         interaction.guild.voice_client.stop()
-        await interaction.edit_original_response(view=None, embed=discord.Embed(title=f'Reproduciendo TTS', color=0Xce0743, timestamp=datetime.datetime.now()).set_footer(text="TTS detenido"))
+        await interaction.edit_original_response(view=None, embed=discord.Embed(title=language_data["tts_playing"], color=0Xce0743, timestamp=datetime.datetime.now()).set_footer(text=language_data["tts_stop"]))
 class BotonesTTS(discord.ui.View):
     @discord.ui.button(label="⏸️", style=discord.ButtonStyle.green)
     async def pausar(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer()
         interaction.guild.voice_client.pause()
-        await interaction.edit_original_response(view=BotonesTTS2(), embed=discord.Embed(title='Reproduciendo TTS', color=0Xce6307, timestamp=datetime.datetime.now()).set_footer(text="TTS pausado"))
+        await interaction.edit_original_response(view=BotonesTTS2(), embed=discord.Embed(title=language_data["tts_playing"], color=0Xce6307, timestamp=datetime.datetime.now()).set_footer(text=language_data["tts_pause"]))
     @discord.ui.button(label="⏹️", style=discord.ButtonStyle.red)
     async def detener(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer()
         interaction.guild.voice_client.stop()
-        await interaction.edit_original_response(view=None, embed=discord.Embed(title='Reproduciendo TTS', color=0Xce0743, timestamp=datetime.datetime.now()).set_footer(text="TTS detenido"))
+        await interaction.edit_original_response(view=None, embed=discord.Embed(title=language_data["tts_playing"], color=0Xce0743, timestamp=datetime.datetime.now()).set_footer(text=language_data["tts_stop"]))
 
-@tree.command(name="tts", description="Escribe el mensaje que quieres decir por voz")
+@tree.command(name="tts", description=language_data["tts_command_description"])
 async def tts(interaction, mensaje: str):
     global is_playing_audio, tts_queue
     if not interaction.user.voice:
-        await interaction.response.send_message(embed=discord.Embed(title=f'Necesitas estar en un canal de voz para usar este comando', color=0XBABBE1), ephemeral=True)
+        await interaction.response.send_message(embed=discord.Embed(title=language_data["not_in_voice_channel"], color=0XBABBE1), ephemeral=True)
         return
 
     sanitized_text = remove_special_characters(mensaje)
-    await interaction.response.send_message(embed=discord.Embed(title=f'Generando TTS', color=0XBABBE1, timestamp=datetime.datetime.now()).set_footer(text="Puede demorarse unos segundos"), ephemeral=True)
-
-    voice_client = None
-    for vc in client.voice_clients:
-        if vc.guild == interaction.guild:
-            voice_client = vc
-            break
-
-    if voice_client is None:
-        voice_client = await interaction.user.voice.channel.connect()
+    await interaction.response.send_message(embed=discord.Embed(title=language_data["tts_generating"], color=0XBABBE1, timestamp=datetime.datetime.now()).set_footer(text=language_data["tts_generating2"]), ephemeral=True)
+    voice_client = next((vc for vc in client.voice_clients if vc.guild == interaction.guild), None)
+    if voice_client is None: voice_client = await interaction.user.voice.channel.connect()
 
     try:
         for (folder_title, folder, models) in categories:
-            print(f'Procesando TTS con la voz de {folder_title}')
+            print(language_data["tts_process"].format(folder_title=folder_title))
             for character_name, model_title, model_version, vc_fn in models:
                 sample_rate, audio_data = await get_vc_fn_result(vc_fn, sanitized_text)
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmpfile: output_filename = tmpfile.name
@@ -383,20 +390,20 @@ async def tts(interaction, mensaje: str):
 
                 if not is_playing_audio:
                     is_playing_audio = True
-                    await interaction.edit_original_response(embed=discord.Embed(title="Reproduciendo TTS", color=0XBABBE1), view=BotonesTTS())
+                    await interaction.edit_original_response(embed=discord.Embed(title=language_data["tts_playing"], color=0XBABBE1), view=BotonesTTS())
                     audio_started = await play_audio(voice_client)
                     await audio_started
                     if not voice_client.is_playing() and not voice_client.is_paused():
-                        await interaction.edit_original_response(view=None, embed=discord.Embed(title=f'TTS reproducido', color=0XBABBE1, timestamp=datetime.datetime.now()))
-                        print(f"TTS procesado y reproducido correctamente")
+                        await interaction.edit_original_response(view=None, embed=discord.Embed(title=language_data["tts_played"], color=0XBABBE1, timestamp=datetime.datetime.now()))
+                        print(language_data["tts_success"])
                 else:
                     queue_position = tts_queue.qsize() - 1
-                    await interaction.edit_original_response(view=None, embed=discord.Embed(title=f'TTS agregado a la cola', color=0XBABBE1, timestamp=datetime.datetime.now()).set_footer(text=f'Tu solicitud de TTS está en la posición {queue_position} de la cola.'))
-                    print(f'TTS agregado a la cola en la posición {queue_position}')
+                    await interaction.edit_original_response(view=None, embed=discord.Embed(title=language_data["tts_added_to_queue"], color=0XBABBE1, timestamp=datetime.datetime.now()).set_footer(text=language_data["tts_added_to_queue2"].format(queue_position=queue_position)))
+                    print(language_data["tts_queue_added"].format(queue_position=queue_position))
 
-    except Exception as e:
-        print(f"Ocurrió un error: {str(e)}")
-        await interaction.edit_original_response(view=None, embed=discord.Embed(title=f'Ocurrió un error al generar el TTS', color=0X990033))
+    except Exception:
+        print(language_data["tts_error_print"])
+        await interaction.edit_original_response(view=None, embed=discord.Embed(title=language_data["tts_error"], color=0X990033))
         await voice_client.disconnect()
 
 client.run(discord_token)
