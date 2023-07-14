@@ -23,7 +23,7 @@ class Encoder(nn.Module):
         self.norm_layers_1 = nn.ModuleList()
         self.ffn_layers = nn.ModuleList()
         self.norm_layers_2 = nn.ModuleList()
-        for i in range(self.n_layers):
+        for _ in range(self.n_layers):
             self.attn_layers.append(MultiHeadAttention(hidden_channels, hidden_channels, n_heads, p_dropout=p_dropout, window_size=window_size))
             self.norm_layers_1.append(LayerNorm(hidden_channels))
             self.ffn_layers.append(FFN(hidden_channels, hidden_channels, filter_channels, kernel_size, p_dropout=p_dropout))
@@ -60,7 +60,7 @@ class Decoder(nn.Module):
         self.norm_layers_1 = nn.ModuleList()
         self.ffn_layers = nn.ModuleList()
         self.norm_layers_2 = nn.ModuleList()
-        for i in range(self.n_layers):
+        for _ in range(self.n_layers):
             self.self_attn_layers.append(MultiHeadAttention(hidden_channels, hidden_channels, n_heads, p_dropout=p_dropout, proximal_bias=proximal_bias, proximal_init=proximal_init))
             self.norm_layers_0.append(LayerNorm(hidden_channels))
             self.encdec_attn_layers.append(MultiHeadAttention(hidden_channels, hidden_channels, n_heads, p_dropout=p_dropout))
@@ -179,54 +179,33 @@ class MultiHeadAttention(nn.Module):
         output = (output.transpose(2, 3).contiguous().view(b, d, t_t))
         return output, p_attn
 
-    def _matmul_with_relative_values(self, x, y):
-        ret = torch.matmul(x, y.unsqueeze(0))
-        return ret
-
-    def _matmul_with_relative_keys(self, x, y):
-        ret = torch.matmul(x, y.unsqueeze(0).transpose(-2, -1))
-        return ret
+    def _matmul_with_relative_values(self, x, y): return torch.matmul(x, y.unsqueeze(0))
+    def _matmul_with_relative_keys(self, x, y): return torch.matmul(x, y.unsqueeze(0).transpose(-2, -1))
 
     def _get_relative_embeddings(self, relative_embeddings, length):
         max_relative_position = 2 * self.window_size + 1
         pad_length = max(length - (self.window_size + 1), 0)
         slice_start_position = max((self.window_size + 1) - length, 0)
         slice_end_position = slice_start_position + 2 * length - 1
-        if pad_length > 0:
-            padded_relative_embeddings = F.pad(
-                relative_embeddings,
-                commons.convert_pad_shape([[0, 0], [pad_length, pad_length], [0, 0]]),
-            )
+        if pad_length > 0:padded_relative_embeddings = F.pad(relative_embeddings, commons.convert_pad_shape([[0, 0], [pad_length, pad_length], [0, 0]]))
         else:
             padded_relative_embeddings = relative_embeddings
-        used_relative_embeddings = padded_relative_embeddings[
-            :, slice_start_position:slice_end_position
-        ]
-        return used_relative_embeddings
+        return padded_relative_embeddings[:, slice_start_position:slice_end_position]
 
     def _relative_position_to_absolute_position(self, x):
         batch, heads, length, _ = x.size()
         x = F.pad(x, commons.convert_pad_shape([[0, 0], [0, 0], [0, 0], [0, 1]]))
-
         x_flat = x.view([batch, heads, length * 2 * length])
-        x_flat = F.pad(
-            x_flat, commons.convert_pad_shape([[0, 0], [0, 0], [0, length - 1]])
-        )
+        x_flat = F.pad(x_flat, commons.convert_pad_shape([[0, 0], [0, 0], [0, length - 1]]))
 
-        x_final = x_flat.view([batch, heads, length + 1, 2 * length - 1])[
-            :, :, :length, length - 1 :
-        ]
-        return x_final
+        return x_flat.view([batch, heads, length + 1, 2 * length - 1])[:, :, :length, length - 1 :]
 
     def _absolute_position_to_relative_position(self, x):
         batch, heads, length, _ = x.size()
-        x = F.pad(
-            x, commons.convert_pad_shape([[0, 0], [0, 0], [0, 0], [0, length - 1]])
-        )
+        x = F.pad(x, commons.convert_pad_shape([[0, 0], [0, 0], [0, 0], [0, length - 1]]))
         x_flat = x.view([batch, heads, length**2 + length * (length - 1)])
         x_flat = F.pad(x_flat, commons.convert_pad_shape([[0, 0], [0, 0], [length, 0]]))
-        x_final = x_flat.view([batch, heads, length, 2 * length])[:, :, :, 1:]
-        return x_final
+        return x_flat.view([batch, heads, length, 2 * length])[:, :, :, 1:]
 
     def _attention_bias_proximal(self, length):
         r = torch.arange(length, dtype=torch.float32)
@@ -243,40 +222,32 @@ class FFN(nn.Module):
         self.p_dropout = p_dropout
         self.activation = activation
         self.causal = causal
-
-        if causal:
-            self.padding = self._causal_padding
-        else:
-            self.padding = self._same_padding
-
+        self.padding = self._causal_padding if causal else self._same_padding
         self.conv_1 = nn.Conv1d(in_channels, filter_channels, kernel_size)
         self.conv_2 = nn.Conv1d(filter_channels, out_channels, kernel_size)
         self.drop = nn.Dropout(p_dropout)
 
     def forward(self, x, x_mask):
         x = self.conv_1(self.padding(x * x_mask))
-        if self.activation == "gelu":
-            x = x * torch.sigmoid(1.702 * x)
-        else:
-            x = torch.relu(x)
+        if self.activation == "gelu": x = x * torch.sigmoid(1.702 * x)
+        else: x = torch.relu(x)
         x = self.drop(x)
         x = self.conv_2(self.padding(x * x_mask))
         return x * x_mask
 
     def _causal_padding(self, x):
-        if self.kernel_size == 1:
-            return x
+        if self.kernel_size == 1: return x
         pad_l = self.kernel_size - 1
         pad_r = 0
-        padding = [[0, 0], [0, 0], [pad_l, pad_r]]
-        x = F.pad(x, commons.convert_pad_shape(padding))
-        return x
+        return self._extracted_from__same_padding_5(pad_l, pad_r, x)
 
     def _same_padding(self, x):
-        if self.kernel_size == 1:
-            return x
+        if self.kernel_size == 1: return x
         pad_l = (self.kernel_size - 1) // 2
         pad_r = self.kernel_size // 2
+        return self._extracted_from__same_padding_5(pad_l, pad_r, x)
+
+    def _extracted_from__same_padding_5(self, pad_l, pad_r, x):
         padding = [[0, 0], [0, 0], [pad_l, pad_r]]
         x = F.pad(x, commons.convert_pad_shape(padding))
         return x
