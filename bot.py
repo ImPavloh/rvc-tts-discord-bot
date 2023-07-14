@@ -1,10 +1,28 @@
 import os
+import sys
 import json
 import logging
 import warnings
+import configparser
 
 warnings.filterwarnings(action='ignore',module='.*paramiko.*')
 
+configdata = configparser.ConfigParser()
+configdata.read('config.ini')
+
+try:
+    discord_token = configdata.get('discord', 'token')
+    bot_activity = configdata.get('discord', 'activity')
+    bot_type_activity = configdata.get('discord', 'type_activity')
+    current_language = configdata.get('discord', 'language')
+    tts_voice = configdata.get('edge_tts', 'voice')
+    apikey = configdata.get('elevenlabs', 'api_key')
+    modelid = configdata.get('elevenlabs', 'model_id')
+    tts_type = configdata.get('tts', 'type_tts')
+except configparser.NoSectionError:
+    print(language_data["error_config"])
+    sys.exit(1)
+    
 current_language = "en"
 def load_language_data():
     global language_data
@@ -18,7 +36,6 @@ print("RVC TTS Discord Bot  -  @impavloh")
 print("-------------------------------------")
 print(language_data["loading"])
 
-import sys
 import glob
 import wave
 import queue
@@ -31,27 +48,10 @@ import discord
 import tempfile
 import datetime
 import unicodedata
-import configparser
 import concurrent.futures
 from vc_infer_pipeline import VC
 from fairseq import checkpoint_utils
 from lib.infer_pack.models import (SynthesizerTrnMs256NSFsid, SynthesizerTrnMs256NSFsid_nono, SynthesizerTrnMs768NSFsid, SynthesizerTrnMs768NSFsid_nono)
-
-configdata = configparser.ConfigParser()
-configdata.read('config.ini')
-
-try:
-    discord_token = configdata.get('discord', 'token')
-    bot_activity = configdata.get('discord', 'activity')
-    bot_type_activity = configdata.get('discord', 'type_activity')
-    tts_voice = configdata.get('edge_tts', 'voice')
-    apikey = configdata.get('elevenlabs', 'api_key')
-    modelid = configdata.get('elevenlabs', 'model_id')
-    tts_type = configdata.get('tts', 'type_tts')
-except configparser.NoSectionError:
-    print(language_data["error_config"])
-    sys.exit(1)
-
 if tts_type == "elevenlabs": import requests
 else: import edge_tts
 
@@ -334,7 +334,6 @@ class Dropdown(discord.ui.Select):
 @tree.command(name="voice", description=language_data["voice_command_description"])
 async def voz(interaction: discord.Interaction): 
     global current_voice
-
     if current_voice is None: await interaction.response.send_message(embed=discord.Embed(title=language_data["voice_not"], color=0XBABBE1), view=CommandDropdownView(), ephemeral=True)
     else: await interaction.response.send_message(embed=discord.Embed(title=language_data["current_voice"].format(current_voice=current_voice), color=0XBABBE1), view=CommandDropdownView(), ephemeral=True)
 
