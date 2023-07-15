@@ -23,11 +23,9 @@ except configparser.NoSectionError:
     print(language_data["error_config"])
     sys.exit(1)
     
-current_language = "en"
 def load_language_data():
     global language_data
-    with open(os.path.join(os.path.dirname(__file__), "locales", f"{current_language}.json"), "r", encoding="utf-8") as lang_file: 
-        language_data = json.load(lang_file)
+    with open(os.path.join(os.path.dirname(__file__), "locales", f"{current_language}.json"), "r", encoding="utf-8") as lang_file: language_data = json.load(lang_file)
 load_language_data()
 
 for logger_name in ("paramiko", "xformers", "fairseq", "discord.client", "discord.gateway", "discord.voice_client", "discord.player"):logging.getLogger(logger_name).setLevel(logging.ERROR)
@@ -74,8 +72,7 @@ def get_existing_model_info(category_directory):
         with open(model_info_path, 'r') as f: return json.load(f)
     return None
 
-def get_model_files(model_path):
-    return [f for f in os.listdir(model_path) if f.endswith('.pth') or f.endswith('.index')]
+def get_model_files(model_path): return [f for f in os.listdir(model_path) if f.endswith('.pth') or f.endswith('.index')]
 
 def should_regenerate_model_info(existing_model_info, model_name, pth_checksum, index_checksum):
     if existing_model_info is None or model_name not in existing_model_info: return True
@@ -238,8 +235,7 @@ async def run_in_executor(func, *args):
     with concurrent.futures.ThreadPoolExecutor() as executor: result = await loop.run_in_executor(executor, func, *args)
     return result
 
-async def get_vc_fn_result(vc_fn, text):
-    return await run_in_executor(vc_fn, text)
+async def get_vc_fn_result(vc_fn, text): return await run_in_executor(vc_fn, text)
 
 load_hubert()
 categories = load_specific_model(target_category_name, target_model_name)
