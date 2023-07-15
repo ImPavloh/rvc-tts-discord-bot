@@ -7,7 +7,11 @@
 
 <h1>🎙️ RVC TTS: An AI-Powered Text-to-Speech Discord Bot 🤖💬</h1>
 <h3>User-friendly  |  Multi-Language Support  |  Easily Configurable</h3>
-
+<a href="README_en.md"><img alt="English" src="https://unpkg.com/language-icons/icons/en.svg" width="50px" style="border-top-left-radius: 25px; border-bottom-left-radius: 25px;"></a>
+<a href="README_es.md"><img alt="Spanish" src="https://unpkg.com/language-icons/icons/es.svg" width="50px"></a>
+<a href="README_pt.md"><img alt="Portuguese" src="https://unpkg.com/language-icons/icons/pt.svg" width="50px"></a>
+<a href="README_de.md"><img alt="German" src="https://unpkg.com/language-icons/icons/de.svg" width="50px"></a>
+<a href="README_fr.md"><img alt="French" src="https://unpkg.com/language-icons/icons/fr.svg" width="50px" style="border-top-right-radius: 25px; border-bottom-right-radius: 25px;"></a>
 </div>
 
 ## 🛠️ Installation
@@ -30,10 +34,10 @@ pip install -r requirements.txt
 4. Add your models following the next format 📂
 ```Swift
 └── Models
-    └── NombreModelo
-        └── NombreModelo
-            ├── Archivo.pth
-            └── Archivo.index
+    └── ModelName
+        └── ModelName
+            ├── File.pth
+            └── File.index
 ```
 
 6. Configure the config.ini file ⚙️
