@@ -2,7 +2,7 @@
   
 ![Logo](https://support.discord.com/hc/article_attachments/115002567312/Robot.gif)
   
-<a href="https://github.com/ImPavloh/cpu-rvc-tts-discord-bot" target="_blank"><img src="https://img.shields.io/github/license/impavloh/cpu-rvc-tts-discord-bot?style=for-the-badge&logo=github&logoColor=white"></a>
+<a href="https://github.com/ImPavloh/rvc-tts-discord-bot" target="_blank"><img src="https://img.shields.io/github/license/impavloh/rvc-tts-discord-bot?style=for-the-badge&logo=github&logoColor=white"></a>
 <a href="https://twitter.com/ImPavloh" target="_blank"><img src="https://img.shields.io/badge/Pavloh-%231DA1F2.svg?style=for-the-badge&logo=twitter&logoColor=white"></a>
 
 <h1>🎙️ RVC TTS: Text-zu-Sprache Discord Bot mit KI 🤖💬</h1>
@@ -18,7 +18,7 @@
 
 1. Klonen Sie das Repository 🗂️ 
 ```bash
-git clone https://github.com/ImPavloh/rvc-tts-discord-bot.git
+git clone https://github.com/ImPavloh/rvc-tts-discord-bot
 ```
 
 2. Wechseln Sie in das Projektverzeichnis 📁 
@@ -31,7 +31,7 @@ cd rvc-tts-discord-bot
 pip install -r requirements.txt
 ```
 
-4. Fügen Sie Ihre Modelle im folgenden Format hinzu 📂
+4. Fügen Sie Ihre RVC Modelle im folgenden Format hinzu 📂
 ```Swift
 └── Models
     └── ModelName
