@@ -31,7 +31,7 @@ cd rvc-tts-discord-bot
 pip install -r requirements.txt
 ```
 
-4. Téléchargez le modèle de base Hubert à partir de [ici](https://huggingface.co/spaces/ImPavloh/RVC-TTS-Demo/resolve/main/hubert_base.pt). Enregistrez le fichier téléchargé dans le dossier racine du projet.
+4. Téléchargez le modèle de base Hubert à partir de **[ici](https://huggingface.co/spaces/ImPavloh/RVC-TTS-Demo/resolve/main/hubert_base.pt)**. Enregistrez le fichier téléchargé dans le dossier racine du projet.
 
 5.  Ajoutez vos RVC modèles en suivant le format suivant 📂
 ```Swift
