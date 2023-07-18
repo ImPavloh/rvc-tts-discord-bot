@@ -31,7 +31,9 @@ cd rvc-tts-discord-bot
 pip install -r requirements.txt
 ```
 
-4. Add your models following the next format 📂
+4. Download the Hubert base model from **[here](https://huggingface.co/spaces/ImPavloh/RVC-TTS-Demo/resolve/main/hubert_base.pt)**. Save the downloaded file to the root folder of the project.
+
+5. Add your models following the next format 📂
 ```Swift
 └── Models
     └── ModelName
