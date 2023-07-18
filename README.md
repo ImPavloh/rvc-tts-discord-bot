@@ -21,7 +21,7 @@
 git clone https://github.com/ImPavloh/rvc-tts-discord-bot.git
 ```
 
-2. Install the necessary dependencies 📦
+2. Change to the project directory 📁
 ```bash
 cd rvc-tts-discord-bot
 ```
