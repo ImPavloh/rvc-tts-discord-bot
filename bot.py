@@ -255,11 +255,11 @@ async def conectar(interaction: discord.Interaction):
     if interaction.user.voice is not None:
         voice_channel = interaction.user.voice.channel
         if interaction.guild.voice_client is None:
-            await voice_channel.connect()
+            await voice_channel.connect(self_deaf=True, self_mute=False)
             await interaction.response.send_message(embed=discord.Embed(title=language_data["bot_connected_to_voice_channel"].format(voice_channel=voice_channel), color=0XBABBE1), ephemeral=True)
         elif interaction.guild.voice_client.channel != voice_channel:
             await interaction.guild.voice_client.disconnect()
-            await voice_channel.connect()
+            await voice_channel.connect(self_deaf=True, self_mute=False)
             await interaction.response.send_message(embed=discord.Embed(title=language_data["bot_moved_to_voice_channel"].format(voice_channel=voice_channel), color=0XBABBE1), ephemeral=True)
         else: await interaction.response.send_message(embed=discord.Embed(title=language_data["bot_already_in_voice_channel"].format(voice_channel=voice_channel), color=0XBABBE1), ephemeral=True)
     else: await interaction.response.send_message(embed=discord.Embed(title=language_data["user_not_in_voice_channel"], color=0xBABBE1), ephemeral=True)
@@ -373,7 +373,7 @@ async def tts(interaction, mensaje: str):
     sanitized_text = remove_special_characters(mensaje)
     await interaction.response.send_message(embed=discord.Embed(title=language_data["tts_generating"], color=0XBABBE1, timestamp=datetime.datetime.now()).set_footer(text=language_data["tts_generating2"]), ephemeral=True)
     voice_client = next((vc for vc in client.voice_clients if vc.guild == interaction.guild), None)
-    if voice_client is None: voice_client = await interaction.user.voice.channel.connect()
+    if voice_client is None: voice_client = await interaction.user.voice.channel.connect(self_deaf=True, self_mute=False)
 
     try:
         for (folder_title, folder, models) in categories:
