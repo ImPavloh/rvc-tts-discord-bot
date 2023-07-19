@@ -2,17 +2,15 @@ from scipy import signal
 from functools import lru_cache
 import torch.nn.functional as F
 import numpy as np, parselmouth, torch
-import pyworld, os, traceback, faiss, librosa
+import librosa, os, traceback, faiss, librosa
 
 bh, ah = signal.butter(N=5, Wn=48, btype="high", fs=16000)
 
 @lru_cache
 def cache_harvest_f0(input_audio_path, fs, f0max, f0min, frame_period, input_audio_path2wav):
     audio = input_audio_path2wav[input_audio_path]
-    f0, t = pyworld.harvest(
-        audio, fs=fs, f0_ceil=f0max, f0_floor=f0min, frame_period=frame_period
-    )
-    f0 = pyworld.stonemask(audio, f0, t, fs)
+    f0, voiced_flag, voiced_probs = librosa.pyin(audio, fmin=f0min, fmax=f0max, sr=fs, frame_length=int(fs*frame_period/1000), hop_length=int(fs*frame_period/1000))
+    f0 = np.where(voiced_flag, f0, 0)
     return f0
 
 def change_rms(data1, sr1, data2, sr2, rate):
