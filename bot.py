@@ -29,7 +29,8 @@ def load_language_data():
 load_language_data()
 
 for logger_name in ("paramiko", "xformers", "fairseq", "discord.client", "discord.gateway", "discord.voice_client", "discord.player"):logging.getLogger(logger_name).setLevel(logging.ERROR)
-
+    
+os.system('cls' if os.name == 'nt' else 'clear')
 print("RVC TTS Discord Bot  -  @impavloh")
 print("-------------------------------------")
 print(language_data["loading"])
