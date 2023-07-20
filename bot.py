@@ -31,7 +31,7 @@ load_language_data()
 for logger_name in ("paramiko", "xformers", "fairseq", "discord.client", "discord.gateway", "discord.voice_client", "discord.player"):logging.getLogger(logger_name).setLevel(logging.ERROR)
     
 os.system('cls' if os.name == 'nt' else 'clear')
-print("RVC TTS Discord Bot  -  @impavloh")
+print("VoiceMe!  -  @impavloh")
 print("-------------------------------------")
 print(language_data["loading"])
 
@@ -61,7 +61,7 @@ tree = discord.app_commands.CommandTree(client)
 
 tts_queue = queue.Queue()
 is_playing_audio = False
-
+    
 def file_checksum(file_path):
     with open(file_path, 'rb') as f:
         file_data = f.read()
@@ -276,7 +276,7 @@ async def salir(interaction: discord.Interaction):
 @tree.command(name="help", description=language_data["help_command_description"])
 async def ayuda(interaction: discord.Interaction):
     embed = discord.Embed(title=f"🎤  {language_data['dialog_title']} 🔊 ", color=0XBABBE1, timestamp=datetime.datetime.now())
-    embed.add_field(name=f":loud_sound: {language_data['dialog_tts_command']}", value=f"`/tts <message>`: {language_data['tts_command_description']}", inline=False)
+    embed.add_field(name=f":loud_sound: {language_data['dialog_tts_command']}", value=f"`/say <message>`: {language_data['tts_command_description']}", inline=False)
     embed.add_field(name=f":speaker: {language_data['dialog_voice_command']}", value=f"`/join`: {language_data['command_connect_description']}\n" f"`/leave`: {language_data['command_disconnect_description']}", inline=False)
     embed.add_field(name=f":microphone2: {language_data['dialog_change_voice']}", value=f"`/voice`: {language_data['voice_command_description']}", inline=False)
     embed.add_field(name=f":question: {language_data['dialog_extra_commands']}", value=f"`/help`: {language_data['help_command_description']}", inline=False)
@@ -288,7 +288,7 @@ async def ayuda(interaction: discord.Interaction):
 
 class LanguageDropdown(discord.ui.Select):
     def __init__(self):
-        options = [discord.SelectOption(label="English", emoji='🇺🇸', value="en"), discord.SelectOption(label="Español", emoji='🇪🇸', value="es"), discord.SelectOption(label="Français", emoji='🇫🇷', value="fr"), discord.SelectOption(label="Deutsch", emoji='🇩🇪', value="ge"), discord.SelectOption(label="Português", emoji='🇵🇹', value="pt")]
+        options = [discord.SelectOption(label="English", emoji='🇺🇸', value="en"), discord.SelectOption(label="Español", emoji='🇪🇸', value="es"), discord.SelectOption(label="Français", emoji='🇫🇷', value="fr"), discord.SelectOption(label="Deutsch", emoji='🇩🇪', value="de"), discord.SelectOption(label="Português", emoji='🇵🇹', value="pt")]
         super().__init__(placeholder=language_data["language_select"], min_values=1, max_values=1, options=options)
 
     async def callback(self, interaction: discord.Interaction):
@@ -363,7 +363,7 @@ class BotonesTTS(discord.ui.View):
         interaction.guild.voice_client.stop()
         await interaction.edit_original_response(view=None, embed=discord.Embed(title=language_data["tts_playing"], color=0Xce0743, timestamp=datetime.datetime.now()).set_footer(text=language_data["tts_stop"]))
 
-@tree.command(name="tts", description=language_data["tts_command_description"])
+@tree.command(name="say", description=language_data["tts_command_description"])
 async def tts(interaction, mensaje: str):
     global is_playing_audio, tts_queue
     if not interaction.user.voice:
