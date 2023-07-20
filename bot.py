@@ -61,7 +61,10 @@ tree = discord.app_commands.CommandTree(client)
 
 tts_queue = queue.Queue()
 is_playing_audio = False
-    
+
+user_voices = {}
+default_voice = ("default_category", "default_model")
+
 def file_checksum(file_path):
     with open(file_path, 'rb') as f:
         file_data = f.read()
@@ -319,15 +322,14 @@ class Dropdown(discord.ui.Select):
     def __init__(self): super().__init__(placeholder=language_data['choose_voice'], min_values=1, max_values=1, options=options)
 
     async def callback(self, interaction: discord.Interaction):
-        global target_category_name, target_model_name, current_voice
+        global user_voices
 
         selected_voice = self.values[0]
 
         if selected_voice in allowed_voices:
             target_category_name, target_model_name = allowed_voices[selected_voice]
-            load_specific_model(target_category_name, target_model_name)
-            current_voice = selected_voice
-            print(language_data["model_changed"].format(current_voice=current_voice))
+            user_voices[interaction.user.id] = (target_category_name, target_model_name)
+            print(language_data["model_changed"].format(current_voice=selected_voice) + f" ({interaction.user.id} | @{interaction.user})")
             embed = discord.Embed(title=language_data['voice_changed'].format(selected_voice=selected_voice) , color=0XBABBE1)
             await interaction.response.send_message(embed=embed)
         else:
@@ -365,7 +367,16 @@ class BotonesTTS(discord.ui.View):
 
 @tree.command(name="say", description=language_data["tts_command_description"])
 async def tts(interaction, mensaje: str):
-    global is_playing_audio, tts_queue
+    global is_playing_audio, tts_queue, user_voices
+
+    user_voice = user_voices.get(interaction.user.id)
+    if user_voice is None:
+        target_category_name, target_model_name = default_voice
+    else:
+        target_category_name, target_model_name = user_voice
+
+    load_specific_model(target_category_name, target_model_name)
+
     if not interaction.user.voice:
         await interaction.response.send_message(embed=discord.Embed(title=language_data["not_in_voice_channel"], color=0XBABBE1), ephemeral=True)
         return
@@ -397,11 +408,11 @@ async def tts(interaction, mensaje: str):
                     await audio_started
                     if not voice_client.is_playing() and not voice_client.is_paused():
                         await interaction.edit_original_response(view=None, embed=discord.Embed(title=language_data["tts_played"], color=0XBABBE1, timestamp=datetime.datetime.now()))
-                        print(language_data["tts_success"])
+                        print(language_data["tts_success"] + f" ({interaction.user.id} | @{interaction.user})")
                 else:
                     queue_position = tts_queue.qsize() - 1
                     await interaction.edit_original_response(view=None, embed=discord.Embed(title=language_data["tts_added_to_queue"], color=0XBABBE1, timestamp=datetime.datetime.now()).set_footer(text=language_data["tts_added_to_queue2"].format(queue_position=queue_position)))
-                    print(language_data["tts_queue_added"].format(queue_position=queue_position))
+                    print(language_data["tts_queue_added"].format(queue_position=queue_position) + f" ({interaction.user.id} | @{interaction.user})")
 
     except Exception:
         print(language_data["tts_error_print"])
