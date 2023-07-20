@@ -248,6 +248,10 @@ print(language_data["bot_started"])
 
 @client.event
 async def on_ready():
+    print("·····································")
+    print("Bot is connected to the following servers:")
+    for guild in client.guilds: print(f"Server: {guild.name} | ID: {guild.id}")
+    print("·····································")
     await tree.sync()
     print(language_data["bot_online"].format(client_user_name=client.user.name))
     activity = discord.Game(name=bot_activity, type=bot_type_activity)
@@ -331,10 +335,8 @@ class Dropdown(discord.ui.Select):
             user_voices[interaction.user.id] = (target_category_name, target_model_name)
             print(language_data["model_changed"].format(current_voice=selected_voice) + f" ({interaction.user.id} | @{interaction.user})")
             embed = discord.Embed(title=language_data['voice_changed'].format(selected_voice=selected_voice) , color=0XBABBE1)
-            await interaction.response.send_message(embed=embed)
-        else:
-            embed = discord.Embed(title=language_data['voice_not_valid'] , color=0XBABBE1)
-            await interaction.response.send_message(embed=embed, ephemeral=True)
+        else: embed = discord.Embed(title=language_data['voice_not_valid'] , color=0XBABBE1)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
 @tree.command(name="voice", description=language_data["voice_command_description"])
 async def voz(interaction: discord.Interaction): 
@@ -370,10 +372,8 @@ async def tts(interaction, mensaje: str):
     global is_playing_audio, tts_queue, user_voices
 
     user_voice = user_voices.get(interaction.user.id)
-    if user_voice is None:
-        target_category_name, target_model_name = default_voice
-    else:
-        target_category_name, target_model_name = user_voice
+    if user_voice is None: target_category_name, target_model_name = default_voice
+    else: target_category_name, target_model_name = user_voice
 
     load_specific_model(target_category_name, target_model_name)
 
