@@ -250,14 +250,14 @@ print(language_data["bot_started"])
 async def on_ready():
     print("·····································")
     print("Bot is connected to the following servers:")
-    for guild in client.guilds: print(f"Server: {guild.name} | ID: {guild.id}")
+    for guild in client.guilds: print(f"{guild.name} | {guild.id}")
     print("·····································")
     await tree.sync()
     print(language_data["bot_online"].format(client_user_name=client.user.name))
     activity = discord.Game(name=bot_activity, type=bot_type_activity)
     await client.change_presence(status=discord.Status.online, activity=activity)
 
-@tree.command(name="join", description=language_data["command_connect_description"])
+@tree.command(name="join", description="Connects the bot to your voice channel")
 async def conectar(interaction: discord.Interaction):
     if interaction.user.voice is not None:
         voice_channel = interaction.user.voice.channel
@@ -271,7 +271,7 @@ async def conectar(interaction: discord.Interaction):
         else: await interaction.response.send_message(embed=discord.Embed(title=language_data["bot_already_in_voice_channel"].format(voice_channel=voice_channel), color=0XBABBE1), ephemeral=True)
     else: await interaction.response.send_message(embed=discord.Embed(title=language_data["user_not_in_voice_channel"], color=0xBABBE1), ephemeral=True)
 
-@tree.command(name="leave", description=language_data["command_disconnect_description"])
+@tree.command(name="leave", description="Disconnects the bot from the voice channel")
 async def salir(interaction: discord.Interaction):
     voice_client = interaction.guild.voice_client
     if not voice_client:
@@ -280,7 +280,7 @@ async def salir(interaction: discord.Interaction):
     await voice_client.disconnect()
     await interaction.response.send_message(embed=discord.Embed(title=language_data['bot_disconnected_from_voice_channel'], color=0XBABBE1), ephemeral=True)
 
-@tree.command(name="help", description=language_data["help_command_description"])
+@tree.command(name="help", description="Displays help information")
 async def ayuda(interaction: discord.Interaction):
     embed = discord.Embed(title=f"🎤  {language_data['dialog_title']} 🔊 ", color=0XBABBE1, timestamp=datetime.datetime.now())
     embed.add_field(name=f":loud_sound: {language_data['dialog_tts_command']}", value=f"`/say <message>`: {language_data['tts_command_description']}", inline=False)
@@ -311,7 +311,7 @@ class LanguageDropdown(discord.ui.Select):
         elif current_language == "en": tts_voice = "en-US-GuyNeural-Male"
         await interaction.response.send_message(embed=discord.Embed(title=language_data["language_changed"].format(new_language=current_language), color=0XBABBE1), ephemeral=True)
 
-@tree.command(name="language", description=language_data["change_language_command_description"])
+@tree.command(name="language", description="Changes the current language of the bot")
 async def language(interaction: discord.Interaction):
     view = discord.ui.View()
     view.add_item(LanguageDropdown())
@@ -338,7 +338,7 @@ class Dropdown(discord.ui.Select):
         else: embed = discord.Embed(title=language_data['voice_not_valid'] , color=0XBABBE1)
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
-@tree.command(name="voice", description=language_data["voice_command_description"])
+@tree.command(name="voice", description="Changes the final voice model of the TTS")
 async def voz(interaction: discord.Interaction): 
     global current_voice
     if current_voice is None: await interaction.response.send_message(embed=discord.Embed(title=language_data["voice_not"], color=0XBABBE1), view=CommandDropdownView(), ephemeral=True)
@@ -367,7 +367,7 @@ class BotonesTTS(discord.ui.View):
         interaction.guild.voice_client.stop()
         await interaction.edit_original_response(view=None, embed=discord.Embed(title=language_data["tts_playing"], color=0Xce0743, timestamp=datetime.datetime.now()).set_footer(text=language_data["tts_stop"]))
 
-@tree.command(name="say", description=language_data["tts_command_description"])
+@tree.command(name="say", description="Speak a message in the voice channel")
 async def tts(interaction, mensaje: str):
     global is_playing_audio, tts_queue, user_voices
 
