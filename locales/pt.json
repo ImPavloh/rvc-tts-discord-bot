@@ -1,12 +1,6 @@
 {
     "loading": "Carregando configuração e modelos",
-    "help_command_description": "Exibe informações de ajuda",
-    "tts_command_description": "Pronuncia uma mensagem no canal de voz",
-    "command_connect_description": "Conecta o bot ao seu canal de voz",
-    "command_disconnect_description": "Desconecta o bot do canal de voz",
     "error_config": "Erro ao carregar configuração",
-    "voice_command_description": "Altera o modelo de voz final do TTS",
-    "change_language_command_description": "Altera a língua atual do bot",
     "language_changed": "Língua alterada para \"{new_language}\"",
     "language_invalid": "Língua inválida",
     "language_select": "🌍 Choisissez une langue",
