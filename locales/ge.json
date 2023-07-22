@@ -1,6 +1,5 @@
 {
     "loading": "Laden von Konfiguration und Modellen",
-    "error_config": "Fehler beim Laden der Konfiguration",
     "language_changed": "Sprache geändert zu \"{new_language}\"",
     "language_invalid": "Ungültige Sprache",
     "language_select": "🌍 Wählen Sie eine Sprache",
