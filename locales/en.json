@@ -1,6 +1,5 @@
 {
   "loading": "Loading configuration and models",
-  "error_config": "Error loading configuration",
   "language_changed": "Language changed to \"{new_language}\"",
   "language_invalid": "Invalid language",
   "language_select": "🌍 Choose a language",
