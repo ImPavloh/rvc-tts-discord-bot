@@ -14,7 +14,7 @@ try:
     discord_token = configdata.get('discord', 'token')
     bot_activity = configdata.get('discord', 'activity')
     bot_type_activity = configdata.get('discord', 'type_activity')
-    current_language = configdata.get('discord', 'language')
+    default_language = configdata.get('discord', 'language')
     tts_voice = configdata.get('edge_tts', 'voice')
     apikey = configdata.get('elevenlabs', 'api_key')
     modelid = configdata.get('elevenlabs', 'model_id')
@@ -22,17 +22,27 @@ try:
 except configparser.NoSectionError:
     print("Error loading configuration")
     sys.exit(1)
-    
-def load_language_data():
-    global language_data
-    with open(os.path.join(os.path.dirname(__file__), "locales", f"{current_language}.json"), "r", encoding="utf-8") as lang_file: language_data = json.load(lang_file)
-load_language_data()
+
+try:
+    with open('user_languages.json', 'r') as f: user_languages = json.load(f)
+except FileNotFoundError: user_languages = {}
+
+def load_language_data(user_id):
+    try:
+        with open('user_languages.json', 'r') as f: user_languages = json.load(f)
+    except FileNotFoundError: user_languages = {}
+
+    try:  user_language = user_languages[str(user_id)]
+    except KeyError: user_language = default_language
+
+    with open(os.path.join(os.path.dirname(__file__), "locales", f"{user_language}.json"), "r", encoding="utf-8") as lang_file: return json.load(lang_file)
 
 for logger_name in ("paramiko", "xformers", "fairseq", "discord.client", "discord.gateway", "discord.voice_client", "discord.player"):logging.getLogger(logger_name).setLevel(logging.ERROR)
     
 os.system('cls' if os.name == 'nt' else 'clear')
 print("VoiceMe!  -  @impavloh")
 print("-------------------------------------")
+language_data = load_language_data("default")
 print(language_data["loading"])
 
 import glob
@@ -94,8 +104,11 @@ def gather_model_info(category_directory, model_name, model_path, existing_model
 
     return {"title": model_name, "model_path": pth_file, "feature_retrieval_library": index_file, "model_path_checksum": pth_checksum, "index_path_checksum": index_checksum}, regenerate
 
-def generate_model_info_files():
-    print(language_data["model_info_generation"])
+def generate_model_info_files(user_id=None):
+    if user_id is None: language_data = load_language_data(default_language)
+    else: language_data = load_language_data(user_id)
+
+    print("Generating model information files")
     folder_info = {}
     model_directory = "models/"
     for category_name in os.listdir(model_directory):
@@ -191,7 +204,7 @@ def load_model_data(category_folder, character_name, info):
     net_g.eval().to(config.device)
     net_g = net_g.half() if config.is_half else net_g.float()
     vc = VC(tgt_sr, config)
-    print(language_data["model_loaded"].format(character_name=character_name, version=version))
+    print(f"RVC ({version}) {character_name} model loaded")
     return [(character_name, model_title, version.upper(), create_vc_fn(model_title, tgt_sr, net_g, vc, if_f0, version, model_index))]
 
 def load_model_net_g(cpt, if_f0, version):
@@ -244,7 +257,8 @@ async def get_vc_fn_result(vc_fn, text): return await run_in_executor(vc_fn, tex
 load_hubert()
 categories = load_specific_model(target_category_name, target_model_name)
 models = categories[0][2]
-print(language_data["bot_started"])
+print("Starting bot")
+
 
 @client.event
 async def on_ready():
@@ -253,6 +267,7 @@ async def on_ready():
     for guild in client.guilds: print(f"{guild.name} | {guild.id}")
     print("·····································")
     await tree.sync()
+    language_data = load_language_data(client.user.id)
     print(language_data["bot_online"].format(client_user_name=client.user.name))
     activity = discord.Game(name=bot_activity, type=bot_type_activity)
     await client.change_presence(status=discord.Status.online, activity=activity)
@@ -282,7 +297,7 @@ async def salir(interaction: discord.Interaction):
 
 @tree.command(name="help", description="Displays help information")
 async def ayuda(interaction: discord.Interaction):
-    embed = discord.Embed(title=f"🎤  {language_data['dialog_title']} 🔊 ", color=0XBABBE1, timestamp=datetime.datetime.now())
+    embed = discord.Embed(title="🎤 VoiceMe! 🔊 ", color=0XBABBE1, timestamp=datetime.datetime.now())
     embed.add_field(name=f":loud_sound: {language_data['dialog_tts_command']}", value=f"`/say <message>`: {language_data['tts_command_description']}", inline=False)
     embed.add_field(name=f":speaker: {language_data['dialog_voice_command']}", value=f"`/join`: {language_data['command_connect_description']}\n" f"`/leave`: {language_data['command_disconnect_description']}", inline=False)
     embed.add_field(name=f":microphone2: {language_data['dialog_change_voice']}", value=f"`/voice`: {language_data['voice_command_description']}", inline=False)
@@ -296,20 +311,22 @@ async def ayuda(interaction: discord.Interaction):
 class LanguageDropdown(discord.ui.Select):
     def __init__(self):
         options = [discord.SelectOption(label="English", emoji='🇺🇸', value="en"), discord.SelectOption(label="Español", emoji='🇪🇸', value="es"), discord.SelectOption(label="Français", emoji='🇫🇷', value="fr"), discord.SelectOption(label="Deutsch", emoji='🇩🇪', value="de"), discord.SelectOption(label="Português", emoji='🇵🇹', value="pt")]
-        super().__init__(placeholder=language_data["language_select"], min_values=1, max_values=1, options=options)
+        super().__init__(placeholder=language_data['language_select'] , min_values=1, max_values=1, options=options)
 
     async def callback(self, interaction: discord.Interaction):
-        global current_language
-        global tts_voice
+        global user_languages, user_voices, language_data
+        user_languages[str(interaction.user.id)] = interaction.data['values'][0]
+        language_data = load_language_data(interaction.user.id)
 
-        current_language = interaction.data['values'][0]
-        load_language_data()
-        if current_language == "es": tts_voice = "es-ES-AlvaroNeural-Male"
-        elif current_language == "pt": tts_voice = "pt-PT-DuarteNeural-Male"
-        elif current_language == "de": tts_voice = "de-AT-JonasNeural-Male"
-        elif current_language == "fr": tts_voice = "fr-FR-HenriNeural-Male"
-        elif current_language == "en": tts_voice = "en-US-GuyNeural-Male"
-        await interaction.response.send_message(embed=discord.Embed(title=language_data["language_changed"].format(new_language=current_language), color=0XBABBE1), ephemeral=True)
+        with open('user_languages.json', 'w') as f: json.dump(user_languages, f)
+
+        if user_languages[str(interaction.user.id)] == "es": user_voices[str(interaction.user.id)] = "es-ES-AlvaroNeural-Male"
+        elif user_languages[str(interaction.user.id)] == "pt": user_voices[str(interaction.user.id)] = "pt-PT-DuarteNeural-Male"
+        elif user_languages[str(interaction.user.id)] == "de": user_voices[str(interaction.user.id)] = "de-AT-JonasNeural-Male"
+        elif user_languages[str(interaction.user.id)] == "fr": user_voices[str(interaction.user.id)] = "fr-FR-HenriNeural-Male"
+        elif user_languages[str(interaction.user.id)] == "en": user_voices[str(interaction.user.id)] = "en-US-GuyNeural-Male"
+        
+        await interaction.response.send_message(embed=discord.Embed(title=language_data["language_changed"].format(new_language=user_languages[str(interaction.user.id)]), color=0XBABBE1), ephemeral=True)
 
 @tree.command(name="language", description="Changes the current language of the bot")
 async def language(interaction: discord.Interaction):
@@ -339,7 +356,7 @@ class Dropdown(discord.ui.Select):
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
 @tree.command(name="voice", description="Changes the final voice model of the TTS")
-async def voz(interaction: discord.Interaction): 
+async def voz(interaction: discord.Interaction):
     global current_voice
     if current_voice is None: await interaction.response.send_message(embed=discord.Embed(title=language_data["voice_not"], color=0XBABBE1), view=CommandDropdownView(), ephemeral=True)
     else: await interaction.response.send_message(embed=discord.Embed(title=language_data["current_voice"].format(current_voice=current_voice), color=0XBABBE1), view=CommandDropdownView(), ephemeral=True)
@@ -370,7 +387,6 @@ class BotonesTTS(discord.ui.View):
 @tree.command(name="say", description="Speak a message in the voice channel")
 async def tts(interaction, mensaje: str):
     global is_playing_audio, tts_queue, user_voices
-
     user_voice = user_voices.get(interaction.user.id)
     if user_voice is None: target_category_name, target_model_name = default_voice
     else: target_category_name, target_model_name = user_voice
