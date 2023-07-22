@@ -20,7 +20,7 @@ try:
     modelid = configdata.get('elevenlabs', 'model_id')
     tts_type = configdata.get('tts', 'type_tts')
 except configparser.NoSectionError:
-    print(language_data["error_config"])
+    print("Error loading configuration")
     sys.exit(1)
     
 def load_language_data():
