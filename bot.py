@@ -317,20 +317,30 @@ class LanguageDropdown(discord.ui.Select):
         super().__init__(placeholder=language_data['language_select'] , min_values=1, max_values=1, options=options)
 
     async def callback(self, interaction: discord.Interaction):
-        global user_languages, user_voices, language_data
+        global user_languages, user_voices, language_data, modelid
         user_languages[str(interaction.user.id)] = interaction.data['values'][0]
         language_data = load_language_data(interaction.user.id)
 
         with open('user_languages.json', 'w') as f: json.dump(user_languages, f)
 
-        if user_languages[str(interaction.user.id)] == "es": user_voices[str(interaction.user.id)] = "es-ES-AlvaroNeural-Male"
-        elif user_languages[str(interaction.user.id)] == "pt": user_voices[str(interaction.user.id)] = "pt-PT-DuarteNeural-Male"
-        elif user_languages[str(interaction.user.id)] == "de": user_voices[str(interaction.user.id)] = "de-AT-JonasNeural-Male"
-        elif user_languages[str(interaction.user.id)] == "fr": user_voices[str(interaction.user.id)] = "fr-FR-HenriNeural-Male"
-        elif user_languages[str(interaction.user.id)] == "en": user_voices[str(interaction.user.id)] = "en-US-GuyNeural-Male"
+        if user_languages[str(interaction.user.id)] == "es": 
+            user_voices[str(interaction.user.id)] = "es-ES-AlvaroNeural-Male"
+            modelid = 'eleven_multilingual_v1'
+        elif user_languages[str(interaction.user.id)] == "pt": 
+            user_voices[str(interaction.user.id)] = "pt-PT-DuarteNeural-Male"
+            modelid = 'eleven_multilingual_v1'
+        elif user_languages[str(interaction.user.id)] == "de": 
+            user_voices[str(interaction.user.id)] = "de-AT-JonasNeural-Male"
+            modelid = 'eleven_multilingual_v1'
+        elif user_languages[str(interaction.user.id)] == "fr": 
+            user_voices[str(interaction.user.id)] = "fr-FR-HenriNeural-Male"
+            modelid = 'eleven_multilingual_v1'
+        elif user_languages[str(interaction.user.id)] == "en": 
+            user_voices[str(interaction.user.id)] = "en-US-GuyNeural-Male"
+            modelid = 'eleven_monolingual_v1'
         
         await interaction.response.send_message(embed=discord.Embed(title=language_data["language_changed"].format(new_language=user_languages[str(interaction.user.id)]), color=0XBABBE1), ephemeral=True)
-
+        
 @tree.command(name="language", description="Changes the current language of the bot")
 async def language(interaction: discord.Interaction):
     view = discord.ui.View()
