@@ -1,182 +1,458 @@
-from scipy import signal
-from functools import lru_cache
-import torch.nn.functional as F
-import numpy as np, parselmouth, torch
-import librosa, os, traceback, faiss, librosa
+import os
+import sys
+import json
+import logging
+import warnings
+import configparser
 
-bh, ah = signal.butter(N=5, Wn=48, btype="high", fs=16000)
+warnings.filterwarnings(action='ignore',module='.*paramiko.*')
+for logger_name in ("paramiko", "xformers", "fairseq", "discord.client", "discord.gateway", "discord.voice_client", "discord.player"):logging.getLogger(logger_name).setLevel(logging.ERROR)
 
-@lru_cache
-def cache_harvest_f0(input_audio_path, fs, f0max, f0min, frame_period, input_audio_path2wav):
-    audio = input_audio_path2wav[input_audio_path]
-    f0, voiced_flag, voiced_probs = librosa.pyin(audio, fmin=f0min, fmax=f0max, sr=fs, frame_length=int(fs*frame_period/1000), hop_length=int(fs*frame_period/1000))
-    f0 = np.where(voiced_flag, f0, 0)
-    return f0
+configdata = configparser.ConfigParser()
+configdata.read('config.ini')
 
-def change_rms(data1, sr1, data2, sr2, rate):
-    rms1 = librosa.feature.rms(y=data1, frame_length=sr1 // 2 * 2, hop_length=sr1 // 2)
-    rms2 = librosa.feature.rms(y=data2, frame_length=sr2 // 2 * 2, hop_length=sr2 // 2)
-    rms1 = torch.from_numpy(rms1).unsqueeze(0)
-    rms2 = torch.from_numpy(rms2).unsqueeze(0)
-    rms1 = F.interpolate(rms1, size=data2.shape[0], mode="linear").squeeze()
-    rms2 = F.interpolate(rms2, size=data2.shape[0], mode="linear").squeeze()
-    rms2 = torch.max(rms2, torch.zeros_like(rms2) + 1e-6)
-    data2 *= (torch.pow(rms1, 1 - rate) * torch.pow(rms2, rate - 1)).numpy()
-    
-    return data2
+try:
+    discord_token = configdata.get('discord', 'token')
+    bot_activity = configdata.get('discord', 'activity')
+    bot_type_activity = configdata.get('discord', 'type_activity')
+    default_language = configdata.get('discord', 'language')
+    tts_voice = configdata.get('edge_tts', 'voice')
+    apikey = configdata.get('elevenlabs', 'api_key')
+    modelid = configdata.get('elevenlabs', 'model_id')
+    tts_type = configdata.get('tts', 'type_tts')
+except configparser.NoSectionError:
+    print("Error loading configuration")
+    sys.exit(1)
 
-class VC:
-    def __init__(self, tgt_sr, config):
-        self.x_pad = config.x_pad
-        self.x_query = config.x_query
-        self.x_center = config.x_center
-        self.x_max = config.x_max
-        self.is_half = config.is_half
-        self.sr = 16000
-        self.window = 160
-        self.t_pad = self.sr * self.x_pad
-        self.t_pad_tgt = tgt_sr * self.x_pad
-        self.t_pad2 = self.t_pad * 2
-        self.t_query = self.sr * self.x_query
-        self.t_center = self.sr * self.x_center
-        self.t_max = self.sr * self.x_max
-        self.device = config.device
+try:
+    with open('user_languages.json', 'r') as f: user_languages = json.load(f)
+except FileNotFoundError: user_languages = {}
 
-    def get_f0(self, input_audio_path, x, p_len, f0_up_key, f0_method, filter_radius, inp_f0=None):
-        global input_audio_path2wav
-        time_step = self.window / self.sr * 1000
-        f0_min = 50
-        f0_max = 1100
-        f0_mel_min = 1127 * np.log(1 + f0_min / 700)
-        f0_mel_max = 1127 * np.log(1 + f0_max / 700)
+def load_language_data(user_id):
+    try:
+        with open('user_languages.json', 'r') as f: user_languages = json.load(f)
+    except FileNotFoundError: user_languages = {}
 
-        if f0_method == "pm":
-            f0 = (parselmouth.Sound(x, self.sr).to_pitch_ac(time_step=time_step / 1000, voicing_threshold=0.6, pitch_floor=f0_min, pitch_ceiling=f0_max).selected_array["frequency"])
-            pad_size = (p_len - len(f0) + 1) // 2
-            if pad_size > 0 or p_len - len(f0) - pad_size > 0: f0 = np.pad(f0, [[pad_size, p_len - len(f0) - pad_size]], mode="constant")
-        f0 *= pow(2, f0_up_key / 12)
-        tf0 = self.sr // self.window
+    try:  user_language = user_languages[str(user_id)]
+    except KeyError: user_language = default_language
 
-        if inp_f0 is not None:
-            delta_t = np.round((inp_f0[:, 0].max() - inp_f0[:, 0].min()) * tf0 + 1).astype("int16")
-            replace_f0 = np.interp(list(range(delta_t)), inp_f0[:, 0] * 100, inp_f0[:, 1])
-            shape = f0[self.x_pad * tf0: self.x_pad * tf0 + len(replace_f0)].shape[0]
-            f0[self.x_pad * tf0: self.x_pad * tf0 + len(replace_f0)] = replace_f0[:shape]
+    with open(os.path.join(os.path.dirname(__file__), "locales", f"{user_language}.json"), "r", encoding="utf-8") as lang_file: return json.load(lang_file)
 
-        f0bak= f0.copy()
-        f0_mel = 1127 * np.log(1 + f0 / 700)
-        f0_mel[f0_mel > 0] = (f0_mel[f0_mel > 0] - f0_mel_min) * 254 / (f0_mel_max - f0_mel_min) + 1
-        f0_mel[f0_mel <= 1] = 1
-        f0_mel[f0_mel > 255] = 255
-        f0_coarse = np.rint(f0_mel).astype(np.int)
-        return f0_coarse, f0bak
+language_data = load_language_data("default")
 
-    def vc(self, model, net_g, sid, audio0, pitch, pitchf, times, index, big_npy, index_rate, version, protect):
-        feats = torch.from_numpy(audio0)
-        feats = feats.half() if self.is_half else feats.float()
+os.system('cls' if os.name == 'nt' else 'clear')
+print("VoiceMe!  -  @impavloh")
+print("-------------------------------------")
+print("Loading configuration and models")
+
+import glob
+import wave
+import queue
+import torch
+import config
+import asyncio
+import librosa
+import hashlib
+import discord
+import tempfile
+import datetime
+import unicodedata
+import concurrent.futures
+from vc_infer_pipeline import VC
+from fairseq import checkpoint_utils
+from lib.infer_pack.models import (SynthesizerTrnMs256NSFsid, SynthesizerTrnMs256NSFsid_nono, SynthesizerTrnMs768NSFsid, SynthesizerTrnMs768NSFsid_nono)
+if tts_type == "elevenlabs": import requests
+else: import edge_tts
+
+config = config.Config()
+
+client = discord.Client(intents=discord.Intents.all())
+tree = discord.app_commands.CommandTree(client)
+
+tts_queue = queue.Queue()
+is_playing_audio = False
+
+user_voices = {}
+default_voice = ("default_category", "default_model")
+
+def file_checksum(file_path):
+    with open(file_path, 'rb') as f:
+        file_data = f.read()
+        return hashlib.md5(file_data).hexdigest()
+
+def get_existing_model_info(category_directory):
+    model_info_path = os.path.join(category_directory, 'model_info.json')
+    if os.path.exists(model_info_path):
+        with open(model_info_path, 'r') as f: return json.load(f)
+    return None
+
+def get_model_files(model_path): return [f for f in os.listdir(model_path) if f.endswith('.pth') or f.endswith('.index')]
+
+def should_regenerate_model_info(existing_model_info, model_name, pth_checksum, index_checksum):
+    if existing_model_info is None or model_name not in existing_model_info: return True
+    return (existing_model_info[model_name]['model_path_checksum'] != pth_checksum or existing_model_info[model_name]['index_path_checksum'] != index_checksum)
+
+def gather_model_info(category_directory, model_name, model_path, existing_model_info):
+    model_files = get_model_files(model_path)
+    if len(model_files) != 2: return None, False
+
+    pth_file = [f for f in model_files if f.endswith('.pth')][0]
+    index_file = [f for f in model_files if f.endswith('.index')][0]
+    pth_checksum = file_checksum(os.path.join(model_path, pth_file))
+    index_checksum = file_checksum(os.path.join(model_path, index_file))
+    regenerate = should_regenerate_model_info(existing_model_info, model_name, pth_checksum, index_checksum)
+
+    return {"title": model_name, "model_path": pth_file, "feature_retrieval_library": index_file, "model_path_checksum": pth_checksum, "index_path_checksum": index_checksum}, regenerate
+
+def generate_model_info_files(user_id=None):
+    if user_id is None: language_data = load_language_data(default_language)
+    else: language_data = load_language_data(user_id)
+
+    print("Generating model information files")
+    folder_info = {}
+    model_directory = "models/"
+    for category_name in os.listdir(model_directory):
+        category_directory = os.path.join(model_directory, category_name)
+        if not os.path.isdir(category_directory): continue
+
+        folder_info[category_name] = {"title": category_name, "folder_path": category_name}
+        existing_model_info = get_existing_model_info(category_directory)
+        model_info = {}
+        regenerate_model_info = False
+
+        for model_name in os.listdir(category_directory):
+            model_path = os.path.join(category_directory, model_name)
+            if not os.path.isdir(model_path): continue
+
+            model_data, regenerate = gather_model_info(category_directory, model_name, model_path, existing_model_info)
+            if model_data is not None:
+                model_info[model_name] = model_data
+                regenerate_model_info |= regenerate
+
+        if regenerate_model_info:
+            with open(os.path.join(category_directory, 'model_info.json'), 'w') as f: json.dump(model_info, f, indent=4)
+
+    folder_info_path = os.path.join(model_directory, 'folder_info.json')
+    with open(folder_info_path, 'w') as f: json.dump(folder_info, f, indent=4)
+
+generate_model_info_files()
+
+allowed_voices = {}
+options = []
+
+model_info_files = glob.glob('models/**/model_info.json', recursive=True)
+for model_info_file in model_info_files:
+    with open(model_info_file, 'r') as f: model_info = json.load(f)
+    for model_name in model_info:
+        allowed_voices[model_name] = (model_name, model_name)
+        options.append(discord.SelectOption(label=model_name, emoji='📦'))
+
+first_model_name = list(allowed_voices.keys())[0]
+target_category_name = first_model_name
+target_model_name = first_model_name
+current_voice = first_model_name
+
+def create_vc_fn(model_title, tgt_sr, net_g, vc, if_f0, version, file_index):
+    def vc_fn(tts_text):
+        try:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmpfile:
+                tts_mp3_filename = tmpfile.name
+                if tts_type == "elevenlabs":
+                    url = "https://api.elevenlabs.io/v1/text-to-speech/VR6AewLTigWG4xSOukaG"
+                    d = {"text": tts_text, "model_id": modelid, "voice_settings": { "stability": 0.75, "similarity_boost": 1}}
+                    h = {"Accept": "audio/mpeg", "Content-Type": "application/json", "xi-api-key": apikey}
+                    response = requests.post(url, json=d, headers=h)
+                    tmpfile.write(response.content)
+                    tmpfile.seek(0)
+                else: asyncio.run(edge_tts.Communicate(tts_text, "-".join(tts_voice.split('-')[:-1])).save(tts_mp3_filename))
+                audio, sr = librosa.load(tts_mp3_filename, sr=16000, mono=True)
+            audio_opt = vc.pipeline(hubert_model, net_g, 0, audio, tts_mp3_filename, [0, 0, 0], -1, "pm", file_index, 0.7, if_f0, 3, tgt_sr, 0, 1, version, 0.5, f0_file=None)
+            os.remove(tts_mp3_filename)
+            return None if audio_opt is None else (tgt_sr, audio_opt)
+        except Exception: return None
+    return vc_fn
+
+def load_specific_model(target_category_name, target_model_name):
+    global categories
+    categories = []
+    categories.clear()
+    with open("models/folder_info.json", "r", encoding="utf-8") as f: folder_info = json.load(f)
+    for category_name, category_info in folder_info.items():
+        if category_name != target_category_name: continue
+        category_title = category_info['title']
+        category_folder = category_info['folder_path']
+        models = []
+        with open(f"models/{category_folder}/model_info.json", "r", encoding="utf-8") as f: models_info = json.load(f)
+        for character_name, info in models_info.items():
+            if character_name != target_model_name: continue
+            models = load_model_data(category_folder, character_name, info)
+        categories.append([category_title, category_folder, models])
+    return categories
+
+def load_model_data(category_folder, character_name, info):
+    model_title = info['title']
+    model_name = info['model_path']
+    model_index = f"models/{category_folder}/{character_name}/{info['feature_retrieval_library']}"
+    cpt = torch.load(f"models/{category_folder}/{character_name}/{model_name}", map_location="cpu")
+    tgt_sr = cpt["config"][-1]
+    cpt["config"][-3] = cpt["weight"]["emb_g.weight"].shape[0]
+    if_f0 = cpt.get("f0", 1)
+    version = cpt.get("version", "v1")
+    net_g = load_model_net_g(cpt, if_f0, version)
+    del net_g.enc_q
+    net_g.load_state_dict(cpt["weight"], strict=False)
+    net_g.eval().to(config.device)
+    net_g = net_g.half() if config.is_half else net_g.float()
+    vc = VC(tgt_sr, config)
+    print(f"RVC ({version}) {character_name} model loaded")
+    return [(character_name, model_title, version.upper(), create_vc_fn(model_title, tgt_sr, net_g, vc, if_f0, version, model_index))]
+
+def load_model_net_g(cpt, if_f0, version):
+    if version == "v1":
+        if if_f0 == 1: net_g = SynthesizerTrnMs256NSFsid(*cpt["config"], is_half=config.is_half)
+        else: net_g = SynthesizerTrnMs256NSFsid_nono(*cpt["config"])
+    elif version == "v2":
+        if if_f0 == 1: net_g = SynthesizerTrnMs768NSFsid(*cpt["config"], is_half=config.is_half)
+        else: net_g = SynthesizerTrnMs768NSFsid_nono(*cpt["config"])
+    return net_g
+
+def load_hubert():
+    global hubert_model
+    models, _, _ = checkpoint_utils.load_model_ensemble_and_task(["hubert_base.pt"], suffix="")
+    hubert_model = models[0]
+    hubert_model = hubert_model.to(config.device)
+    hubert_model = hubert_model.half() if config.is_half else hubert_model.float()
+    hubert_model.eval()
+
+def remove_special_characters(text): return ''.join(c for c in text if not unicodedata.category(c).startswith('So'))
+
+async def play_audio(voice_client):
+    global is_playing_audio, tts_queue
+    audio_started = asyncio.Future()
+
+    def after_play(_):
+        voice_client.stop()
+        audio_started.set_result(None)
+
+    while not tts_queue.empty():
+        output_filename, audio_data, sample_rate = tts_queue.get()
+        audio_source = discord.FFmpegPCMAudio(executable="ffmpeg", source=output_filename)
+        audio_source = discord.PCMVolumeTransformer(audio_source, volume=0.7)
+        voice_client.play(audio_source, after=after_play)
+        num_frames = len(audio_data) // 2
+        duration = num_frames / sample_rate
+        await asyncio.sleep(duration + 1)
+
+    is_playing_audio = False
+    return audio_started
+
+async def run_in_executor(func, *args):
+    loop = asyncio.get_event_loop()
+    if asyncio.iscoroutinefunction(func): return await func(*args)
+    with concurrent.futures.ThreadPoolExecutor() as executor: result = await loop.run_in_executor(executor, func, *args)
+    return result
+
+async def get_vc_fn_result(vc_fn, text): return await run_in_executor(vc_fn, text)
+
+load_hubert()
+categories = load_specific_model(target_category_name, target_model_name)
+models = categories[0][2]
+print("Starting bot")
+
+@client.event
+async def on_ready():
+    print("·····································")
+    print(f"Bot is connected to {len(client.guilds)} servers:")
+    for guild in client.guilds: print(f"{guild.name} | {guild.id}")
+    print("·····································")
+    await tree.sync()
+    language_data = load_language_data(client.user.id)
+    print(f"Bot online as {client.user.name}")
+    activity = discord.Game(name=bot_activity, type=bot_type_activity)
+    await client.change_presence(status=discord.Status.online, activity=activity)
+
+@tree.command(name="join", description="Connects the bot to your voice channel")
+async def conectar(interaction: discord.Interaction):
+    language_data = load_language_data(interaction.user.id)
+    if interaction.user.voice is not None:
+        voice_channel = interaction.user.voice.channel
+        if interaction.guild.voice_client is None:
+            await voice_channel.connect(self_deaf=True, self_mute=False)
+            await interaction.response.send_message(embed=discord.Embed(title=language_data["bot_connected_to_voice_channel"].format(voice_channel=voice_channel), color=0XBABBE1), ephemeral=True)
+        elif interaction.guild.voice_client.channel != voice_channel:
+            await interaction.guild.voice_client.disconnect()
+            await voice_channel.connect(self_deaf=True, self_mute=False)
+            await interaction.response.send_message(embed=discord.Embed(title=language_data["bot_moved_to_voice_channel"].format(voice_channel=voice_channel), color=0XBABBE1), ephemeral=True)
+        else: await interaction.response.send_message(embed=discord.Embed(title=language_data["bot_already_in_voice_channel"].format(voice_channel=voice_channel), color=0XBABBE1), ephemeral=True)
+    else: await interaction.response.send_message(embed=discord.Embed(title=language_data["user_not_in_voice_channel"], color=0xBABBE1), ephemeral=True)
+
+@tree.command(name="leave", description="Disconnects the bot from the voice channel")
+async def salir(interaction: discord.Interaction):
+    language_data = load_language_data(interaction.user.id)
+    voice_client = interaction.guild.voice_client
+    if not voice_client:
+        await interaction.response.send_message(embed=discord.Embed(title=language_data['bot_not_in_voice_channel'], color=0XBABBE1), ephemeral=True)
+        return
+    await voice_client.disconnect()
+    await interaction.response.send_message(embed=discord.Embed(title=language_data['bot_disconnected_from_voice_channel'], color=0XBABBE1), ephemeral=True)
+
+@tree.command(name="help", description="Displays help information")
+async def ayuda(interaction: discord.Interaction):
+    global user_languages, language_data
+    language_data = load_language_data(interaction.user.id)
+    embed = discord.Embed(title="🎤 VoiceMe! 🔊 ", color=0XBABBE1, timestamp=datetime.datetime.now())
+    embed.add_field(name=f":loud_sound: {language_data['dialog_tts_command']}", value=f"`/say <message>`: {language_data['tts_command_description']}", inline=False)
+    embed.add_field(name=f":speaker: {language_data['dialog_voice_command']}", value=f"`/join`: {language_data['command_connect_description']}\n" f"`/leave`: {language_data['command_disconnect_description']}", inline=False)
+    embed.add_field(name=f":microphone2: {language_data['dialog_change_voice']}", value=f"`/voice`: {language_data['voice_command_description']}", inline=False)
+    embed.add_field(name=f":question: {language_data['dialog_extra_commands']}", value=f"`/help`: {language_data['help_command_description']}", inline=False)
+    embed.set_footer(text="RVC TTS Discord Bot • @impavloh ")
+    view = discord.ui.View()
+    view.add_item(discord.ui.Button(label='Twitter', style=discord.ButtonStyle.blurple, url='https://twitter.com/impavloh'))
+    view.add_item(discord.ui.Button(label='GitHub', style=discord.ButtonStyle.link, url='https://github.com/ImPavloh/rvc-tts-discord-bot'))
+    await interaction.response.send_message(embed=embed, view=view)
+
+class LanguageDropdown(discord.ui.Select):
+    def __init__(self):
+        options = [discord.SelectOption(label="English", emoji='🇺🇸', value="en"), discord.SelectOption(label="Español", emoji='🇪🇸', value="es"), discord.SelectOption(label="Français", emoji='🇫🇷', value="fr"), discord.SelectOption(label="Deutsch", emoji='🇩🇪', value="de"), discord.SelectOption(label="Português", emoji='🇵🇹', value="pt")]
+        super().__init__(placeholder=language_data['language_select'] , min_values=1, max_values=1, options=options)
+
+    async def callback(self, interaction: discord.Interaction):
+        global user_languages, user_voices, language_data, modelid
+        user_languages[str(interaction.user.id)] = interaction.data['values'][0]
+        language_data = load_language_data(interaction.user.id)
+
+        with open('user_languages.json', 'w') as f: json.dump(user_languages, f)
+
+        if user_languages[str(interaction.user.id)] == "es": 
+            user_voices[str(interaction.user.id)] = "es-ES-AlvaroNeural-Male"
+            modelid = 'eleven_multilingual_v1'
+        elif user_languages[str(interaction.user.id)] == "pt": 
+            user_voices[str(interaction.user.id)] = "pt-PT-DuarteNeural-Male"
+            modelid = 'eleven_multilingual_v1'
+        elif user_languages[str(interaction.user.id)] == "de": 
+            user_voices[str(interaction.user.id)] = "de-AT-JonasNeural-Male"
+            modelid = 'eleven_multilingual_v1'
+        elif user_languages[str(interaction.user.id)] == "fr": 
+            user_voices[str(interaction.user.id)] = "fr-FR-HenriNeural-Male"
+            modelid = 'eleven_multilingual_v1'
+        elif user_languages[str(interaction.user.id)] == "en": 
+            user_voices[str(interaction.user.id)] = "en-US-GuyNeural-Male"
+            modelid = 'eleven_monolingual_v1'
         
-        if feats.dim() == 2: feats = feats.mean(-1)
-        assert feats.dim() == 1, feats.dim()
-        feats = feats.view(1, -1)
-        padding_mask = torch.BoolTensor(feats.shape).to(self.device).fill_(False)
-
-        inputs = { "source": feats.to(self.device), "padding_mask": padding_mask, "output_layer": 9 if version == "v1" else 12}
-
-        with torch.no_grad():
-            logits = model.extract_features(**inputs)
-            feats = model.final_proj(logits[0]) if version == "v1" else logits[0]
+        await interaction.response.send_message(embed=discord.Embed(title=language_data["language_changed"].format(new_language=user_languages[str(interaction.user.id)]), color=0XBABBE1), ephemeral=True)
         
-        if protect < 0.5 and pitch is not None and pitchf is not None:
-            feats0 = feats.clone()
-        
-        if index is not None and big_npy is not None and index_rate != 0:
-            npy = feats[0].cpu().numpy()
-            if self.is_half: npy = npy.astype("float64")
+@tree.command(name="language", description="Changes the current language of the bot")
+async def language(interaction: discord.Interaction):
+    view = discord.ui.View()
+    view.add_item(LanguageDropdown())
+    await interaction.response.send_message(view=view, ephemeral=True)
 
-            score, ix = index.search(npy, k=8)
-            weight = np.square(1 / score)
-            weight /= weight.sum(axis=1, keepdims=True)
-            npy = np.sum(big_npy[ix] * np.expand_dims(weight, axis=2), axis=1)
+class CommandDropdownView(discord.ui.View):
+    def __init__(self):
+        super().__init__()
+        self.add_item(Dropdown())
 
-            if self.is_half: npy = npy.astype("float16")
-            feats = ( torch.from_numpy(npy).unsqueeze(0).to(self.device) * index_rate + (1 - index_rate) * feats)
+class Dropdown(discord.ui.Select):
+    def __init__(self): super().__init__(placeholder=language_data['choose_voice'], min_values=1, max_values=1, options=options)
 
-        feats = F.interpolate(feats.permute(0, 2, 1), scale_factor=2).permute(0, 2, 1)
-        if protect < 0.5 and pitch is not None and pitchf is not None: feats0 = F.interpolate(feats0.permute(0, 2, 1), scale_factor=2).permute(0, 2, 1)
+    async def callback(self, interaction: discord.Interaction):
+        global user_voices
+        language_data = load_language_data(interaction.user.id)
+        selected_voice = self.values[0]
 
-        p_len = audio0.shape[0] // self.window
-        if feats.shape[1] < p_len:
-            p_len = feats.shape[1]
-            if pitch is not None and pitchf is not None:
-                pitch = pitch[:, :p_len]
-                pitchf = pitchf[:, :p_len]
+        if selected_voice in allowed_voices:
+            target_category_name, target_model_name = allowed_voices[selected_voice]
+            user_voices[interaction.user.id] = (target_category_name, target_model_name)
+            print(f"Voice model changed to {selected_voice} ({interaction.user.id} | @{interaction.user})")
+            
+            embed = discord.Embed(title=language_data['voice_changed'].format(selected_voice=selected_voice) , color=0XBABBE1)
+        else: embed = discord.Embed(title=language_data['voice_not_valid'] , color=0XBABBE1)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
-        if protect < 0.5 and pitch is not None and pitchf is not None:
-            pitchff = pitchf.clone()
-            pitchff[pitchf > 0] = 1
-            pitchff[pitchf < 1] = protect
-            pitchff = pitchff.unsqueeze(-1)
-            feats = feats * pitchff + feats0 * (1 - pitchff)
-            feats = feats.to(feats0.dtype)
-        p_len = torch.tensor([p_len], device=self.device).long()
-        
-        with torch.no_grad():
-            if pitch is not None and pitchf is not None: audio1 = ((net_g.infer(feats, p_len, pitch, pitchf, sid)[0][0, 0]).data.cpu().float().numpy())
-            else: audio1 = ((net_g.infer(feats, p_len, sid)[0][0, 0]).data.cpu().float().numpy())
-        
-        del feats, p_len, padding_mask
-        return audio1
+@tree.command(name="voice", description="Changes the final voice model of the TTS")
+async def voz(interaction: discord.Interaction):
+    global current_voice
+    language_data = load_language_data(interaction.user.id)
+    if current_voice is None: await interaction.response.send_message(embed=discord.Embed(title=language_data["voice_not"], color=0XBABBE1), view=CommandDropdownView(), ephemeral=True)
+    else: await interaction.response.send_message(embed=discord.Embed(title=language_data["current_voice"].format(current_voice=current_voice), color=0XBABBE1), view=CommandDropdownView(), ephemeral=True)
 
-    def pipeline(self,model, net_g, sid, audio, input_audio_path, times, f0_up_key, f0_method, file_index, index_rate, if_f0, filter_radius, tgt_sr, resample_sr, rms_mix_rate, version, protect, f0_file=None):
-        if (file_index != "" and os.path.exists(file_index) == True and index_rate != 0):
-            try:
-                index = faiss.read_index(file_index)
-                big_npy = index.reconstruct_n(0, index.ntotal)
-            except:
-                traceback.print_exc()
-                index = big_npy = None
-        else: index = big_npy = None
-        audio = signal.filtfilt(bh, ah, audio)
-        audio_pad = np.pad(audio, (self.window // 2, self.window // 2), mode="reflect")
-        opt_ts = []
-        if audio_pad.shape[0] > self.t_max:
-            audio_sum = np.zeros_like(audio)
-            for i in range(self.window): audio_sum += audio_pad[i : i - self.window]
-            for t in range(self.t_center, audio.shape[0], self.t_center): opt_ts.append(t - self.t_query + np.where(np.abs(audio_sum[t - self.t_query : t + self.t_query]) == np.abs(audio_sum[t - self.t_query : t + self.t_query]).min())[0][0])
-        s = 0
-        audio_opt = []
-        t = None
-        audio_pad = np.pad(audio, (self.t_pad, self.t_pad), mode="reflect")
-        p_len = audio_pad.shape[0] // self.window
-        inp_f0 = None
-        if hasattr(f0_file, "name") == True:
-            try:
-                with open(f0_file.name, "r") as f: lines = f.read().strip("\n").split("\n")
-                inp_f0 = [[float(i) for i in line.split(",")] for line in lines]
-                inp_f0 = np.array(inp_f0, dtype="float64")
-            except Exception: traceback.print_exc()
-        sid = torch.tensor(sid, device=self.device).unsqueeze(0).long()
-        pitch, pitchf = None, None
-        if if_f0 == 1:
-            pitch, pitchf = self.get_f0(input_audio_path,audio_pad,p_len,f0_up_key,f0_method,filter_radius,inp_f0)
-            pitch = pitch[:p_len]
-            pitchf = pitchf[:p_len]
-            pitch = torch.tensor(pitch, device=self.device).unsqueeze(0).long()
-            pitchf = torch.tensor(pitchf, device=self.device).unsqueeze(0).float()
-        for t in opt_ts:
-            t = t // self.window * self.window
-            if if_f0 == 1: audio_opt.append(self.vc(model, net_g, sid,audio_pad[s : t + self.t_pad2 + self.window], pitch[:, s // self.window : (t + self.t_pad2) // self.window],pitchf[:, s // self.window : (t + self.t_pad2) // self.window],times,index,big_npy,index_rate,version,protect,)[self.t_pad_tgt : -self.t_pad_tgt])
-            else: audio_opt.append(self.vc(model,net_g,sid,audio_pad[s : t + self.t_pad2 + self.window],None,None,times,index,big_npy,index_rate,version,protect)[self.t_pad_tgt : -self.t_pad_tgt])
-            s = t
-        if if_f0 == 1: audio_opt.append(self.vc(model,net_g,sid,audio_pad[t:],pitch[:, t // self.window :] if t is not None else pitch,pitchf[:, t // self.window :] if t is not None else pitchf,times,index,big_npy,index_rate,version,protect,)[self.t_pad_tgt : -self.t_pad_tgt])
-        else: audio_opt.append(self.vc(model, net_g, sid, audio_pad[t:], None, None, times, index, big_npy, index_rate, version, protect)[self.t_pad_tgt : -self.t_pad_tgt])
-        audio_opt = np.concatenate(audio_opt)
-        if rms_mix_rate != 1: audio_opt = change_rms(audio, 16000, audio_opt, tgt_sr, rms_mix_rate)
-        if resample_sr >= 16000 and tgt_sr != resample_sr: audio_opt = librosa.resample(audio_opt, orig_sr=tgt_sr, target_sr=resample_sr)
-        audio_max = np.abs(audio_opt).max() / 0.99
-        max_int16 = 32768
-        if audio_max > 1: max_int16 /= audio_max
-        audio_opt = (audio_opt * max_int16).astype(np.int16)
-        del pitch, pitchf, sid
-        if torch.cuda.is_available(): torch.cuda.empty_cache()
-        return audio_opt
+class BotonesTTS2(discord.ui.View):
+    @discord.ui.button(label="▶️", style=discord.ButtonStyle.green)
+    async def reanudar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        language_data = load_language_data(interaction.user.id)
+        await interaction.response.defer()
+        interaction.guild.voice_client.resume()
+        await interaction.edit_original_response(view=BotonesTTS(), embed=discord.Embed(title=language_data["tts_playing"], color=0X07ce1b, timestamp=datetime.datetime.now()).set_footer(text=language_data["tts_continue"]))
+    @discord.ui.button(label="⏹️", style=discord.ButtonStyle.red)
+    async def detener(self, interaction: discord.Interaction, button: discord.ui.Button):
+        language_data = load_language_data(interaction.user.id)
+        await interaction.response.defer()
+        interaction.guild.voice_client.stop()
+        await interaction.edit_original_response(view=None, embed=discord.Embed(title=language_data["tts_playing"], color=0Xce0743, timestamp=datetime.datetime.now()).set_footer(text=language_data["tts_stop"]))
+class BotonesTTS(discord.ui.View):
+    @discord.ui.button(label="⏸️", style=discord.ButtonStyle.green)
+    async def pausar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        language_data = load_language_data(interaction.user.id)
+        await interaction.response.defer()
+        interaction.guild.voice_client.pause()
+        await interaction.edit_original_response(view=BotonesTTS2(), embed=discord.Embed(title=language_data["tts_playing"], color=0Xce6307, timestamp=datetime.datetime.now()).set_footer(text=language_data["tts_pause"]))
+    @discord.ui.button(label="⏹️", style=discord.ButtonStyle.red)
+    async def detener(self, interaction: discord.Interaction, button: discord.ui.Button):
+        language_data = load_language_data(interaction.user.id)
+        await interaction.response.defer()
+        interaction.guild.voice_client.stop()
+        await interaction.edit_original_response(view=None, embed=discord.Embed(title=language_data["tts_playing"], color=0Xce0743, timestamp=datetime.datetime.now()).set_footer(text=language_data["tts_stop"]))
+
+@tree.command(name="say", description="Speak a message in the voice channel")
+async def tts(interaction, mensaje: str):
+    global is_playing_audio, tts_queue, user_voices
+    language_data = load_language_data(interaction.user.id)
+    user_voice = user_voices.get(interaction.user.id)
+    if user_voice is None: target_category_name, target_model_name = default_voice
+    else: target_category_name, target_model_name = user_voice
+
+    load_specific_model(target_category_name, target_model_name)
+
+    if not interaction.user.voice:
+        await interaction.response.send_message(embed=discord.Embed(title=language_data["not_in_voice_channel"], color=0XBABBE1), ephemeral=True)
+        return
+
+    sanitized_text = remove_special_characters(mensaje)
+    await interaction.response.send_message(embed=discord.Embed(title=language_data["tts_generating"], color=0XBABBE1, timestamp=datetime.datetime.now()).set_footer(text=language_data["tts_generating2"]), ephemeral=True)
+    voice_client = next((vc for vc in client.voice_clients if vc.guild == interaction.guild), None)
+    if voice_client is None: voice_client = await interaction.user.voice.channel.connect(self_deaf=True, self_mute=False)
+
+    try:
+        for (folder_title, folder, models) in categories:
+            print(f"Processing TTS with the voice of {folder_title}")
+            for character_name, model_title, model_version, vc_fn in models:
+                sample_rate, audio_data = await get_vc_fn_result(vc_fn, sanitized_text)
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmpfile: output_filename = tmpfile.name
+                with wave.open(output_filename, "wb") as wav_file:
+                    wav_file.setnchannels(1)
+                    wav_file.setsampwidth(2)
+                    wav_file.setframerate(sample_rate)
+                    wav_file.writeframes(audio_data)
+                    wav_file.close()
+
+                tts_queue.put((output_filename, audio_data, sample_rate))
+
+                if not is_playing_audio:
+                    is_playing_audio = True
+                    await interaction.edit_original_response(embed=discord.Embed(title=language_data["tts_playing"], color=0XBABBE1), view=BotonesTTS())
+                    audio_started = await play_audio(voice_client)
+                    await audio_started
+                    if not voice_client.is_playing() and not voice_client.is_paused():
+                        await interaction.edit_original_response(view=None, embed=discord.Embed(title=language_data["tts_played"], color=0XBABBE1, timestamp=datetime.datetime.now()))
+                        print(f"TTS processed and played correctly ({interaction.user.id} | @{interaction.user})")
+                else:
+                    queue_position = tts_queue.qsize() - 1
+                    await interaction.edit_original_response(view=None, embed=discord.Embed(title=language_data["tts_added_to_queue"], color=0XBABBE1, timestamp=datetime.datetime.now()).set_footer(text=language_data["tts_added_to_queue2"].format(queue_position=queue_position)))
+                    print(f"TTS added to the queue at position {queue_position} ({interaction.user.id} | @{interaction.user})")
+
+    except Exception:
+        print("An error occurred")
+        await interaction.edit_original_response(view=None, embed=discord.Embed(title=language_data["tts_error"], color=0X990033))
+        await voice_client.disconnect()
+
+client.run(discord_token)
