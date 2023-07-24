@@ -43,7 +43,7 @@ language_data = load_language_data("default")
 os.system('cls' if os.name == 'nt' else 'clear')
 print("VoiceMe!  -  @impavloh")
 print("-------------------------------------")
-print("Loading configuration and models")
+print("Loading configuration")
 
 import glob
 import wave
@@ -146,11 +146,6 @@ for model_info_file in model_info_files:
     for model_name in model_info:
         allowed_voices[model_name] = (model_name, model_name)
         options.append(discord.SelectOption(label=model_name, emoji='📦'))
-
-first_model_name = list(allowed_voices.keys())[0]
-target_category_name = first_model_name
-target_model_name = first_model_name
-current_voice = first_model_name
 
 def create_vc_fn(model_title, tgt_sr, net_g, vc, if_f0, version, file_index):
     def vc_fn(tts_text):
@@ -255,9 +250,87 @@ async def run_in_executor(func, *args):
 async def get_vc_fn_result(vc_fn, text): return await run_in_executor(vc_fn, text)
 
 load_hubert()
-categories = load_specific_model(target_category_name, target_model_name)
-models = categories[0][2]
 print("Starting bot")
+
+class BotonesTTS2(discord.ui.View):
+    @discord.ui.button(label="▶️", style=discord.ButtonStyle.green)
+    async def reanudar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        language_data = load_language_data(interaction.user.id)
+        await interaction.response.defer()
+        interaction.guild.voice_client.resume()
+        await interaction.edit_original_response(view=BotonesTTS(), embed=discord.Embed(title=language_data["tts_playing"], color=0X07ce1b, timestamp=datetime.datetime.now()).set_footer(text=language_data["tts_continue"]))
+    @discord.ui.button(label="⏹️", style=discord.ButtonStyle.red)
+    async def detener(self, interaction: discord.Interaction, button: discord.ui.Button):
+        language_data = load_language_data(interaction.user.id)
+        await interaction.response.defer()
+        interaction.guild.voice_client.stop()
+        await interaction.edit_original_response(view=None, embed=discord.Embed(title=language_data["tts_playing"], color=0Xce0743, timestamp=datetime.datetime.now()).set_footer(text=language_data["tts_stop"]))
+
+class BotonesTTS(discord.ui.View):
+    @discord.ui.button(label="⏸️", style=discord.ButtonStyle.green)
+    async def pausar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        language_data = load_language_data(interaction.user.id)
+        await interaction.response.defer()
+        interaction.guild.voice_client.pause()
+        await interaction.edit_original_response(view=BotonesTTS2(), embed=discord.Embed(title=language_data["tts_playing"], color=0Xce6307, timestamp=datetime.datetime.now()).set_footer(text=language_data["tts_pause"]))
+    @discord.ui.button(label="⏹️", style=discord.ButtonStyle.red)
+    async def detener(self, interaction: discord.Interaction, button: discord.ui.Button):
+        language_data = load_language_data(interaction.user.id)
+        await interaction.response.defer()
+        interaction.guild.voice_client.stop()
+        await interaction.edit_original_response(view=None, embed=discord.Embed(title=language_data["tts_playing"], color=0Xce0743, timestamp=datetime.datetime.now()).set_footer(text=language_data["tts_stop"]))
+
+class LanguageDropdown(discord.ui.Select):
+    def __init__(self):
+        options = [discord.SelectOption(label="English", emoji='🇺🇸', value="en"), discord.SelectOption(label="Español", emoji='🇪🇸', value="es"), discord.SelectOption(label="Français", emoji='🇫🇷', value="fr"), discord.SelectOption(label="Deutsch", emoji='🇩🇪', value="de"), discord.SelectOption(label="Português", emoji='🇵🇹', value="pt")]
+        super().__init__(placeholder=language_data['language_select'] , min_values=1, max_values=1, options=options)
+
+    async def callback(self, interaction: discord.Interaction):
+        global user_languages, user_voices, language_data, modelid
+        user_languages[str(interaction.user.id)] = interaction.data['values'][0]
+        language_data = load_language_data(interaction.user.id)
+
+        with open('user_languages.json', 'w') as f: json.dump(user_languages, f)
+
+        if user_languages[str(interaction.user.id)] == "es": 
+            user_voices[str(interaction.user.id)] = "es-ES-AlvaroNeural-Male"
+            modelid = 'eleven_multilingual_v1'
+        elif user_languages[str(interaction.user.id)] == "pt": 
+            user_voices[str(interaction.user.id)] = "pt-PT-DuarteNeural-Male"
+            modelid = 'eleven_multilingual_v1'
+        elif user_languages[str(interaction.user.id)] == "de": 
+            user_voices[str(interaction.user.id)] = "de-AT-JonasNeural-Male"
+            modelid = 'eleven_multilingual_v1'
+        elif user_languages[str(interaction.user.id)] == "fr": 
+            user_voices[str(interaction.user.id)] = "fr-FR-HenriNeural-Male"
+            modelid = 'eleven_multilingual_v1'
+        elif user_languages[str(interaction.user.id)] == "en": 
+            user_voices[str(interaction.user.id)] = "en-US-GuyNeural-Male"
+            modelid = 'eleven_monolingual_v1'
+        
+        await interaction.response.send_message(embed=discord.Embed(title=language_data["language_changed"].format(new_language=user_languages[str(interaction.user.id)]), color=0XBABBE1), ephemeral=True)
+
+class CommandDropdownView(discord.ui.View):
+    def __init__(self):
+        super().__init__()
+        self.add_item(Dropdown())
+
+class Dropdown(discord.ui.Select):
+    def __init__(self): super().__init__(placeholder=language_data['choose_voice'], min_values=1, max_values=1, options=options)
+
+    async def callback(self, interaction: discord.Interaction):
+        global user_voices
+        language_data = load_language_data(interaction.user.id)
+        selected_voice = self.values[0]
+
+        if selected_voice in allowed_voices:
+            target_category_name, target_model_name = allowed_voices[selected_voice]
+            user_voices[interaction.user.id] = (target_category_name, target_model_name)
+            print(f"Voice model changed to {selected_voice} ({interaction.user.id} | @{interaction.user})")
+            
+            embed = discord.Embed(title=language_data['voice_changed'].format(selected_voice=selected_voice) , color=0XBABBE1)
+        else: embed = discord.Embed(title=language_data['voice_not_valid'] , color=0XBABBE1)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
 @client.event
 async def on_ready():
@@ -310,36 +383,6 @@ async def ayuda(interaction: discord.Interaction):
     view.add_item(discord.ui.Button(label='Twitter', style=discord.ButtonStyle.blurple, url='https://twitter.com/impavloh'))
     view.add_item(discord.ui.Button(label='GitHub', style=discord.ButtonStyle.link, url='https://github.com/ImPavloh/rvc-tts-discord-bot'))
     await interaction.response.send_message(embed=embed, view=view)
-
-class LanguageDropdown(discord.ui.Select):
-    def __init__(self):
-        options = [discord.SelectOption(label="English", emoji='🇺🇸', value="en"), discord.SelectOption(label="Español", emoji='🇪🇸', value="es"), discord.SelectOption(label="Français", emoji='🇫🇷', value="fr"), discord.SelectOption(label="Deutsch", emoji='🇩🇪', value="de"), discord.SelectOption(label="Português", emoji='🇵🇹', value="pt")]
-        super().__init__(placeholder=language_data['language_select'] , min_values=1, max_values=1, options=options)
-
-    async def callback(self, interaction: discord.Interaction):
-        global user_languages, user_voices, language_data, modelid
-        user_languages[str(interaction.user.id)] = interaction.data['values'][0]
-        language_data = load_language_data(interaction.user.id)
-
-        with open('user_languages.json', 'w') as f: json.dump(user_languages, f)
-
-        if user_languages[str(interaction.user.id)] == "es": 
-            user_voices[str(interaction.user.id)] = "es-ES-AlvaroNeural-Male"
-            modelid = 'eleven_multilingual_v1'
-        elif user_languages[str(interaction.user.id)] == "pt": 
-            user_voices[str(interaction.user.id)] = "pt-PT-DuarteNeural-Male"
-            modelid = 'eleven_multilingual_v1'
-        elif user_languages[str(interaction.user.id)] == "de": 
-            user_voices[str(interaction.user.id)] = "de-AT-JonasNeural-Male"
-            modelid = 'eleven_multilingual_v1'
-        elif user_languages[str(interaction.user.id)] == "fr": 
-            user_voices[str(interaction.user.id)] = "fr-FR-HenriNeural-Male"
-            modelid = 'eleven_multilingual_v1'
-        elif user_languages[str(interaction.user.id)] == "en": 
-            user_voices[str(interaction.user.id)] = "en-US-GuyNeural-Male"
-            modelid = 'eleven_monolingual_v1'
-        
-        await interaction.response.send_message(embed=discord.Embed(title=language_data["language_changed"].format(new_language=user_languages[str(interaction.user.id)]), color=0XBABBE1), ephemeral=True)
         
 @tree.command(name="language", description="Changes the current language of the bot")
 async def language(interaction: discord.Interaction):
@@ -347,69 +390,25 @@ async def language(interaction: discord.Interaction):
     view.add_item(LanguageDropdown())
     await interaction.response.send_message(view=view, ephemeral=True)
 
-class CommandDropdownView(discord.ui.View):
-    def __init__(self):
-        super().__init__()
-        self.add_item(Dropdown())
-
-class Dropdown(discord.ui.Select):
-    def __init__(self): super().__init__(placeholder=language_data['choose_voice'], min_values=1, max_values=1, options=options)
-
-    async def callback(self, interaction: discord.Interaction):
-        global user_voices
-        language_data = load_language_data(interaction.user.id)
-        selected_voice = self.values[0]
-
-        if selected_voice in allowed_voices:
-            target_category_name, target_model_name = allowed_voices[selected_voice]
-            user_voices[interaction.user.id] = (target_category_name, target_model_name)
-            print(f"Voice model changed to {selected_voice} ({interaction.user.id} | @{interaction.user})")
-            
-            embed = discord.Embed(title=language_data['voice_changed'].format(selected_voice=selected_voice) , color=0XBABBE1)
-        else: embed = discord.Embed(title=language_data['voice_not_valid'] , color=0XBABBE1)
-        await interaction.response.send_message(embed=embed, ephemeral=True)
-
 @tree.command(name="voice", description="Changes the final voice model of the TTS")
 async def voz(interaction: discord.Interaction):
     global current_voice
     language_data = load_language_data(interaction.user.id)
+    current_voice = user_voices.get(interaction.user.id)
     if current_voice is None: await interaction.response.send_message(embed=discord.Embed(title=language_data["voice_not"], color=0XBABBE1), view=CommandDropdownView(), ephemeral=True)
     else: await interaction.response.send_message(embed=discord.Embed(title=language_data["current_voice"].format(current_voice=current_voice), color=0XBABBE1), view=CommandDropdownView(), ephemeral=True)
 
-class BotonesTTS2(discord.ui.View):
-    @discord.ui.button(label="▶️", style=discord.ButtonStyle.green)
-    async def reanudar(self, interaction: discord.Interaction, button: discord.ui.Button):
-        language_data = load_language_data(interaction.user.id)
-        await interaction.response.defer()
-        interaction.guild.voice_client.resume()
-        await interaction.edit_original_response(view=BotonesTTS(), embed=discord.Embed(title=language_data["tts_playing"], color=0X07ce1b, timestamp=datetime.datetime.now()).set_footer(text=language_data["tts_continue"]))
-    @discord.ui.button(label="⏹️", style=discord.ButtonStyle.red)
-    async def detener(self, interaction: discord.Interaction, button: discord.ui.Button):
-        language_data = load_language_data(interaction.user.id)
-        await interaction.response.defer()
-        interaction.guild.voice_client.stop()
-        await interaction.edit_original_response(view=None, embed=discord.Embed(title=language_data["tts_playing"], color=0Xce0743, timestamp=datetime.datetime.now()).set_footer(text=language_data["tts_stop"]))
-class BotonesTTS(discord.ui.View):
-    @discord.ui.button(label="⏸️", style=discord.ButtonStyle.green)
-    async def pausar(self, interaction: discord.Interaction, button: discord.ui.Button):
-        language_data = load_language_data(interaction.user.id)
-        await interaction.response.defer()
-        interaction.guild.voice_client.pause()
-        await interaction.edit_original_response(view=BotonesTTS2(), embed=discord.Embed(title=language_data["tts_playing"], color=0Xce6307, timestamp=datetime.datetime.now()).set_footer(text=language_data["tts_pause"]))
-    @discord.ui.button(label="⏹️", style=discord.ButtonStyle.red)
-    async def detener(self, interaction: discord.Interaction, button: discord.ui.Button):
-        language_data = load_language_data(interaction.user.id)
-        await interaction.response.defer()
-        interaction.guild.voice_client.stop()
-        await interaction.edit_original_response(view=None, embed=discord.Embed(title=language_data["tts_playing"], color=0Xce0743, timestamp=datetime.datetime.now()).set_footer(text=language_data["tts_stop"]))
-
 @tree.command(name="say", description="Speak a message in the voice channel")
-async def tts(interaction, mensaje: str):
+async def tts(interaction: discord.Interaction, mensaje: str):
     global is_playing_audio, tts_queue, user_voices
     language_data = load_language_data(interaction.user.id)
     user_voice = user_voices.get(interaction.user.id)
-    if user_voice is None: target_category_name, target_model_name = default_voice
-    else: target_category_name, target_model_name = user_voice
+
+    if user_voice is None: 
+        await interaction.response.send_message(embed=discord.Embed(title=language_data["voice_not_selected_title"], description=language_data["voice_not_selected_description"], color=0XBABBE1), ephemeral=True)
+        return
+
+    target_category_name, target_model_name = user_voice
 
     load_specific_model(target_category_name, target_model_name)
 
@@ -451,8 +450,8 @@ async def tts(interaction, mensaje: str):
                     print(f"TTS added to the queue at position {queue_position} ({interaction.user.id} | @{interaction.user})")
 
     except Exception:
-        print("An error occurred")
         await interaction.edit_original_response(view=None, embed=discord.Embed(title=language_data["tts_error"], color=0X990033))
         await voice_client.disconnect()
+        print("An error occurred")
 
 client.run(discord_token)
