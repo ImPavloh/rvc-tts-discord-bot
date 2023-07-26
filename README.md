@@ -82,7 +82,7 @@ Once the bot has been invited to your Discord server, you can interact with it u
 
 ⚙️  `config.ini`: Configuration file that stores key information, such as the language, the bot's [Discord token](https://discord.com/developers/applications) and [ElevenLabs](https://elevenlabs.io) API key. Change the data before running the bot.
 
-🗂️  `models/`: Folder that should contain the voice models that will be used for text-to-speech conversion. If everything is correct, the bot will automatically detect the models and information files for the program will be generated.
+🗂️  `models/`: Folder that should contain the voice models that will be used for text-to-speech conversion. If everything is correct, the bot will automatically detect the RVC models and information files for the program will be generated.
 
 📑  `requirements.txt`: File containing all the Python dependencies needed for the bot to function.
 
