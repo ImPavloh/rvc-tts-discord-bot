@@ -82,7 +82,7 @@ Sobald der Bot zu Ihrem Discord-Server hinzugefügt wurde, können Sie mit ihm i
 
 ⚙️ `config.ini`: Konfigurationsdatei, die Schlüsselinformationen wie Sprache, [Discord Bot Token](https://discord.com/developers/applications) und [ElevenLabs](https://elevenlabs.io) API-Schlüssel speichert. Ändern Sie die Daten, bevor Sie den Bot ausführen.
 
-🗂️ `models/`: Ordner, der die Sprachmodelle enthalten sollte, die für die Text-zu-Sprache-Konvertierung verwendet werden. Wenn alles korrekt ist, wird der Bot die Modelle automatisch erkennen und Informationsdateien für das Programm generieren.
+🗂️ `models/`: Ordner, der die Sprachmodelle enthalten sollte, die für die Text-zu-Sprache-Konvertierung verwendet werden. Wenn alles korrekt ist, wird der Bot die RVC Modelle automatisch erkennen und Informationsdateien für das Programm generieren.
 
 📑 `requirements.txt`: Datei, die alle erforderlichen Python-Abhängigkeiten für den Betrieb des Bots enthält.
 
