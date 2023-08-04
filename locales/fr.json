@@ -1,4 +1,5 @@
 {
+  "cooldown" : "Vous êtes en temps de recharge. Veuillez réessayer dans \"{cooldown}\" secondes ",
   "help_command_description": "Affiche l'aide",
   "voice_not_selected_title": "Voix non sélectionnée",
   "voice_not_selected_description": "Vous devez sélectionner un modèle de voix en utilisant la commande `/voice` avant d'utiliser la commande `/say`.",
