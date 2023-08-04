@@ -1,4 +1,5 @@
 {
+  "cooldown": "Du befindest dich im Abklingmodus. Bitte versuche es in \"{cooldown}\" Sekunden erneut",
   "help_command_description": "Zeigt Hilfeinformationen an",
   "voice_not_selected_title": "Keine Stimme ausgewählt",
   "voice_not_selected_description": "Sie müssen ein Stimmmodell mit dem Befehl `/voice` auswählen, bevor Sie den Befehl `/say` verwenden können.",
@@ -26,9 +27,9 @@
   "dialog_extra_commands": "Zusätzliche Befehle",
   "choose_voice": "Wähle ein Stimmmodell",
   "voice_not_valid": "Stimme ist nicht gültig",
-  "voice_changed": "Stimme geändert zu \"{selected_voice}\"",
+  "voice_changed": "Stimme geändert zu \"{selected_voice}\" ",
   "voice_not": "Keine Stimme ausgewählt",
-  "current_voice": "Die aktuelle Stimme ist \"{current_voice}\"",
+  "current_voice": "Die aktuelle Stimme ist \"{current_voice}\" ",
   "not_in_voice_channel": "Sie müssen in einem Sprachkanal sein, um diesen Befehl zu verwenden",
   "bot_connected_to_voice_channel": "Ich habe mich mit dem Sprachkanal \"{voice_channel}\" verbunden",
   "bot_already_in_voice_channel": "Ich bin bereits mit dem Sprachkanal \"{voice_channel}\" verbunden",
