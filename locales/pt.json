@@ -1,4 +1,5 @@
 {
+  "cooldown" : "Você está em cooldown. Tente novamente em \"{cooldown}\" segundos ",
   "help_command_description": "Exibe informações de ajuda",
   "voice_not_selected_title": "Voz não selecionada",
   "voice_not_selected_description": "Você deve selecionar um modelo de voz usando o comando `/voice` antes de usar o comando `/say`.",
