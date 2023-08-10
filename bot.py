@@ -331,7 +331,23 @@ class Dropdown(discord.ui.Select):
             embed = discord.Embed(title=language_data['voice_changed'].format(selected_voice=selected_voice) , color=0XBABBE1)
         else: embed = discord.Embed(title=language_data['voice_not_valid'] , color=0XBABBE1)
         await interaction.response.send_message(embed=embed, ephemeral=True)
-
+        
+@client.event
+async def on_guild_join(guild):
+    print("·····································")
+    print(f"Bot joined new server {guild.name} | {guild.id}")
+    print(f"Now connected to {len(client.guilds)} servers")
+    print("·····································")
+    await tree.sync()
+    
+@client.event
+async def on_guild_remove(guild):
+    print("·····································")
+    print(f"Bot left a server {guild.name} | {guild.id}")
+    print(f"Now connected to {len(client.guilds)} servers")
+    print("·····································")
+    await tree.sync()
+    
 @client.event
 async def on_ready():
     print("·····································")
@@ -343,6 +359,12 @@ async def on_ready():
     print(f"Bot online as {client.user.name}")
     activity = discord.Game(name=bot_activity, type=bot_type_activity)
     await client.change_presence(status=discord.Status.online, activity=activity)
+
+@tree.error
+async def voz_error(interaction: discord.Interaction, error):
+    if isinstance(error, discord.app_commands.errors.CommandOnCooldown):
+        await interaction.response.send_message(embed=discord.Embed(title=language_data["cooldown"].format(cooldown=int(error.retry_after)), color=0XBABBE1), ephemeral=True)
+        print(f"VOZ ERROR | {interaction.user.id} | @{interaction.user} | Server {interaction.guild.name} | {datetime.datetime.now()}")
 
 @tree.command(name="join", description="Connects the bot to your voice channel")
 async def conectar(interaction: discord.Interaction):
@@ -381,16 +403,18 @@ async def ayuda(interaction: discord.Interaction):
     embed.set_footer(text="RVC TTS Discord Bot • @impavloh ")
     view = discord.ui.View()
     view.add_item(discord.ui.Button(label='Twitter', style=discord.ButtonStyle.blurple, url='https://twitter.com/impavloh'))
-    view.add_item(discord.ui.Button(label='GitHub', style=discord.ButtonStyle.link, url='https://github.com/ImPavloh/rvc-tts-discord-bot'))
+    view.add_item(discord.ui.Button(label='Web', style=discord.ButtonStyle.link, url='https://pavloh.com/#/voiceme'))
     await interaction.response.send_message(embed=embed, view=view)
         
 @tree.command(name="language", description="Changes the current language of the bot")
+@discord.app_commands.checks.cooldown(1, 5.0, key=lambda i: (i.guild_id, i.user.id))
 async def language(interaction: discord.Interaction):
     view = discord.ui.View()
     view.add_item(LanguageDropdown())
     await interaction.response.send_message(view=view, ephemeral=True)
-
+    
 @tree.command(name="voice", description="Changes the final voice model of the TTS")
+@discord.app_commands.checks.cooldown(1, 5.0, key=lambda i: (i.guild_id, i.user.id))
 async def voz(interaction: discord.Interaction):
     global current_voice
     language_data = load_language_data(interaction.user.id)
@@ -399,10 +423,13 @@ async def voz(interaction: discord.Interaction):
     else: await interaction.response.send_message(embed=discord.Embed(title=language_data["current_voice"].format(current_voice=current_voice), color=0XBABBE1), view=CommandDropdownView(), ephemeral=True)
 
 @tree.command(name="say", description="Speak a message in the voice channel")
+@discord.app_commands.checks.cooldown(1, 10.0, key=lambda i: (i.guild_id, i.user.id))
 async def tts(interaction: discord.Interaction, mensaje: str):
     global is_playing_audio, tts_queue, user_voices
     language_data = load_language_data(interaction.user.id)
     user_voice = user_voices.get(interaction.user.id)
+
+    print(f"User {interaction.user} used 'say' command on {datetime.datetime.now()} in server {interaction.guild.name}")
 
     if user_voice is None: 
         await interaction.response.send_message(embed=discord.Embed(title=language_data["voice_not_selected_title"], description=language_data["voice_not_selected_description"], color=0XBABBE1), ephemeral=True)
@@ -452,6 +479,6 @@ async def tts(interaction: discord.Interaction, mensaje: str):
     except Exception:
         await interaction.edit_original_response(view=None, embed=discord.Embed(title=language_data["tts_error"], color=0X990033))
         await voice_client.disconnect()
-        print("An error occurred")
-
+        print(f"TTS ERROR | {interaction.user.id} | @{interaction.user} | Server {interaction.guild.name} | {datetime.datetime.now()}")
+        
 client.run(discord_token)
