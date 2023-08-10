@@ -71,6 +71,7 @@ import discord
 import tempfile
 import unicodedata
 import concurrent.futures
+from discord.ext import tasks
 from vc_infer_pipeline import VC
 from fairseq import checkpoint_utils
 from lib.infer_pack.models import (SynthesizerTrnMs256NSFsid, SynthesizerTrnMs256NSFsid_nono, SynthesizerTrnMs768NSFsid, SynthesizerTrnMs768NSFsid_nono)
@@ -344,7 +345,16 @@ class Dropdown(discord.ui.Select):
             embed = discord.Embed(title=language_data['voice_changed'].format(selected_voice=selected_voice) , color=0XBABBE1)
         else: embed = discord.Embed(title=language_data['voice_not_valid'] , color=0XBABBE1)
         await interaction.response.send_message(embed=embed, ephemeral=True)
-        
+
+@tasks.loop(seconds=30)
+async def afk():
+    for guild in client.guilds:
+        for voice_channel in guild.voice_channels:
+            if len(voice_channel.members) == 1:
+                voice_client = guild.voice_client
+                if voice_client:
+                    await voice_client.disconnect()
+            
 @client.event
 async def on_guild_join(guild):
     logger.info("·····································")
@@ -370,6 +380,7 @@ async def on_ready():
     language_data = load_language_data(client.user.id)
     logger.info(f"Bot online as {client.user.name}")
     activity = discord.Game(name=bot_activity, type=bot_type_activity)
+    afk.start()
     await client.change_presence(status=discord.Status.online, activity=activity)
 
 @tree.error
@@ -377,7 +388,7 @@ async def voz_error(interaction: discord.Interaction, error):
     if isinstance(error, discord.app_commands.errors.CommandOnCooldown):
         await interaction.response.send_message(embed=discord.Embed(title=language_data["cooldown"].format(cooldown=int(error.retry_after)), color=0XBABBE1), ephemeral=True)
         logger.info(f"VOZ ERROR | {interaction.user.id} | @{interaction.user} | Server {interaction.guild.name} | {datetime.datetime.now()}")
-
+                
 @tree.command(name="join", description="Connects the bot to your voice channel")
 async def conectar(interaction: discord.Interaction):
     language_data = load_language_data(interaction.user.id)
@@ -415,7 +426,8 @@ async def ayuda(interaction: discord.Interaction):
     embed.set_footer(text="RVC TTS Discord Bot • @impavloh ")
     view = discord.ui.View()
     view.add_item(discord.ui.Button(label='Twitter', style=discord.ButtonStyle.blurple, url='https://twitter.com/impavloh'))
-    view.add_item(discord.ui.Button(label='Web', style=discord.ButtonStyle.link, url='https://pavloh.com/#/voiceme'))
+    view.add_item(discord.ui.Button(label='Web', style=discord.ButtonStyle.link, url='https://voiceme.pavloh.com/'))
+    view.add_item(discord.ui.Button(label='Support', style=discord.ButtonStyle.link, url='https://www.buymeacoffee.com/pavloh'))
     await interaction.response.send_message(embed=embed, view=view)
         
 @tree.command(name="language", description="Changes the current language of the bot")
