@@ -27,7 +27,7 @@
   "dialog_extra_commands": "Comandos extra",
   "choose_voice": "Elige un modelo de voz",
   "voice_not_valid": "La voz no es válida",
-  "voice_changed": "La voz ha cambiado a {selected_voice}\" ",
+  "voice_changed": "La voz ha cambiado a {selected_voice} ",
   "voice_not": "No se ha seleccionado ninguna voz",
   "current_voice": "La voz actual es {current_voice} ",
   "not_in_voice_channel": "Necesitas estar en un canal de voz para usar este comando",
