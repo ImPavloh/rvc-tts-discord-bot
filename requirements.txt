@@ -4,6 +4,7 @@ demucs
 ffmpeg
 asyncio
 discord
+openpyxl
 requests
 edge-tts
 torchcrepe
