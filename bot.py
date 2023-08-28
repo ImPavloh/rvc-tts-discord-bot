@@ -1,26 +1,40 @@
 import os
 import sys
 import json
+import glob
+import wave
+import queue
+import torch
+import config
+import librosa
+import discord
 import logging
+import asyncio
+import hashlib
+import tempfile
 import datetime
 import warnings
+import unicodedata
 import configparser
+import concurrent.futures
+from discord.ext import tasks
+from openpyxl import Workbook, load_workbook
 
 warnings.filterwarnings(action='ignore', module='.*paramiko.*')
 
-modules_to_ignore = ["paramiko", "xformers", "fairseq", "discord.client", "discord.gateway", "discord.voice_client", "discord.player"]
+modules_to_ignore = ["paramiko", "xformers", "fairseq", "discord.client", "discord.gateway", "discord.voice_client", "discord.player", "asyncio", "numba", "ffmpeg"]
 for logger_name in modules_to_ignore: logging.getLogger(logger_name).setLevel(logging.ERROR)
 
 if not os.path.exists('logs'): os.makedirs('logs')
-    
-log_filename = os.path.join('logs', f'{datetime.datetime.today().strftime("%Y-%m-%d")}.txt')
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
 
-handler = logging.FileHandler(filename=log_filename, encoding='utf-8', mode='w')
-formatter = logging.Formatter('%(asctime)s:%(levelname)s:%(name)s: %(message)s')
-handler.setFormatter(formatter)
-logger.addHandler(handler)
+console_formatter = logging.Formatter('%(asctime)s | %(message)s', datefmt='%Y-%m-%d | %H:%M:%S')
+
+logging.basicConfig(filename= os.path.join('logs', f'{datetime.datetime.today().strftime("%Y-%m-%d")}.txt'), level=logging.DEBUG, format='%(asctime)s; %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+
+console_handler = logging.StreamHandler()
+console_handler.setFormatter(console_formatter) 
+
+logging.getLogger('').addHandler(console_handler)
 
 configdata = configparser.ConfigParser()
 configdata.read('config.ini')
@@ -35,8 +49,20 @@ try:
     modelid = configdata.get('elevenlabs', 'model_id')
     tts_type = configdata.get('tts', 'type_tts')
 except configparser.NoSectionError:
-    logger.info("Error loading configuration")
+    logging.info("Error loading configuration")
     sys.exit(1)
+
+if not os.path.exists('bot_activity.xlsx'):
+    wb = Workbook()
+    ws = wb.active
+    ws.append(["Date", "Event", "Server ID", "Server name", "Status"])
+    wb.save('bot_activity.xlsx')
+
+if tts_type == "elevenlabs": import requests
+else: import edge_tts
+from vc_infer_pipeline import VC
+from fairseq import checkpoint_utils
+from lib.infer_pack.models import (SynthesizerTrnMs256NSFsid, SynthesizerTrnMs256NSFsid_nono, SynthesizerTrnMs768NSFsid, SynthesizerTrnMs768NSFsid_nono)
 
 try:
     with open('user_languages.json', 'r') as f: user_languages = json.load(f)
@@ -55,28 +81,9 @@ def load_language_data(user_id):
 language_data = load_language_data("default")
 
 os.system('cls' if os.name == 'nt' else 'clear')
-logger.info("VoiceMe!  -  @impavloh")
-logger.info("-------------------------------------")
-logger.info("Loading configuration")
-
-import glob
-import wave
-import queue
-import torch
-import config
-import asyncio
-import librosa
-import hashlib
-import discord
-import tempfile
-import unicodedata
-import concurrent.futures
-from discord.ext import tasks
-from vc_infer_pipeline import VC
-from fairseq import checkpoint_utils
-from lib.infer_pack.models import (SynthesizerTrnMs256NSFsid, SynthesizerTrnMs256NSFsid_nono, SynthesizerTrnMs768NSFsid, SynthesizerTrnMs768NSFsid_nono)
-if tts_type == "elevenlabs": import requests
-else: import edge_tts
+logging.info("VoiceMe!  -  @impavloh")
+logging.info("-------------------------------------")
+logging.info("Loading configuration")
 
 config = config.Config()
 
@@ -122,7 +129,7 @@ def generate_model_info_files(user_id=None):
     if user_id is None: language_data = load_language_data(default_language)
     else: language_data = load_language_data(user_id)
 
-    logger.info("Generating model information files")
+    logging.info("Generating model information files")
     folder_info = {}
     model_directory = "models/"
     for category_name in os.listdir(model_directory):
@@ -213,7 +220,7 @@ def load_model_data(category_folder, character_name, info):
     net_g.eval().to(config.device)
     net_g = net_g.half() if config.is_half else net_g.float()
     vc = VC(tgt_sr, config)
-    logger.info(f"RVC ({version}) {character_name} model loaded")
+    logging.info(f"RVC ({version}) {character_name} model loaded")
     return [(character_name, model_title, version.upper(), create_vc_fn(model_title, tgt_sr, net_g, vc, if_f0, version, model_index))]
 
 def load_model_net_g(cpt, if_f0, version):
@@ -235,7 +242,7 @@ def load_hubert():
 
 def remove_special_characters(text): return ''.join(c for c in text if not unicodedata.category(c).startswith('So'))
 
-async def play_audio(voice_client):
+async def play_audio(voice_client, output_filename):
     global is_playing_audio, tts_queue
     audio_started = asyncio.Future()
 
@@ -264,7 +271,7 @@ async def run_in_executor(func, *args):
 async def get_vc_fn_result(vc_fn, text): return await run_in_executor(vc_fn, text)
 
 load_hubert()
-logger.info("Starting bot")
+logging.info("Starting bot")
 
 class BotonesTTS2(discord.ui.View):
     @discord.ui.button(label="▶️", style=discord.ButtonStyle.green)
@@ -280,7 +287,21 @@ class BotonesTTS2(discord.ui.View):
         interaction.guild.voice_client.stop()
         await interaction.edit_original_response(view=None, embed=discord.Embed(title=language_data["tts_playing"], color=0Xce0743, timestamp=datetime.datetime.now()).set_footer(text=language_data["tts_stop"]))
 
+class DownloadButton(discord.ui.Button):
+    def __init__(self, filename, **kwargs):
+        super().__init__(style=discord.ButtonStyle.grey, label="⬇️", **kwargs)
+        self.filename = filename
+
+    async def callback(self, interaction: discord.Interaction):
+        with open(self.filename, 'rb') as fp:
+            file = discord.File(fp, filename="audio.wav")
+            await interaction.response.send_message("Aquí está el audio que solicitaste.", file=file)
+
 class BotonesTTS(discord.ui.View):
+    def __init__(self, output_filename, **kwargs):
+        super().__init__(**kwargs)
+        self.output_filename = output_filename
+
     @discord.ui.button(label="⏸️", style=discord.ButtonStyle.green)
     async def pausar(self, interaction: discord.Interaction, button: discord.ui.Button):
         language_data = load_language_data(interaction.user.id)
@@ -293,7 +314,31 @@ class BotonesTTS(discord.ui.View):
         await interaction.response.defer()
         interaction.guild.voice_client.stop()
         await interaction.edit_original_response(view=None, embed=discord.Embed(title=language_data["tts_playing"], color=0Xce0743, timestamp=datetime.datetime.now()).set_footer(text=language_data["tts_stop"]))
+    @discord.ui.button(label="⬇️", style=discord.ButtonStyle.grey)
+    async def descargar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        language_data = load_language_data(interaction.user.id)
+        await interaction.response.defer()
+        if self.output_filename:
+            with open(self.output_filename, 'rb') as fp:
+                file = discord.File(fp, filename="audio.wav")
+                await interaction.followup.send(file=file, embed=discord.Embed(title=language_data["tts_downloaded_audio"], color=0XBABBE1, timestamp=datetime.datetime.now()))
+        else: await interaction.edit_original_response(view=None, embed=discord.Embed(title=language_data["tts_playing"], color=0Xce0743, timestamp=datetime.datetime.now()).set_footer(text=language_data["tts_no_audio"]))        
 
+class BotonesTTS3(discord.ui.View):
+    def __init__(self, output_filename, **kwargs):
+        super().__init__(**kwargs)
+        self.output_filename = output_filename
+
+    @discord.ui.button(label="⬇️", style=discord.ButtonStyle.grey)
+    async def descargar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        language_data = load_language_data(interaction.user.id)
+        await interaction.response.defer()
+        if self.output_filename:
+            with open(self.output_filename, 'rb') as fp:
+                file = discord.File(fp, filename="audio.wav")
+                await interaction.followup.send(file=file, embed=discord.Embed(title=language_data["tts_downloaded_audio"], color=0XBABBE1, timestamp=datetime.datetime.now()))
+        else: await interaction.edit_original_response(view=None, embed=discord.Embed(title=language_data["tts_playing"], color=0Xce0743, timestamp=datetime.datetime.now()).set_footer(text=language_data["tts_no_audio"]))        
+                      
 class LanguageDropdown(discord.ui.Select):
     def __init__(self):
         options = [discord.SelectOption(label="English", emoji='🇺🇸', value="en"), discord.SelectOption(label="Español", emoji='🇪🇸', value="es"), discord.SelectOption(label="Français", emoji='🇫🇷', value="fr"), discord.SelectOption(label="Deutsch", emoji='🇩🇪', value="de"), discord.SelectOption(label="Português", emoji='🇵🇹', value="pt")]
@@ -340,7 +385,7 @@ class Dropdown(discord.ui.Select):
         if selected_voice in allowed_voices:
             target_category_name, target_model_name = allowed_voices[selected_voice]
             user_voices[interaction.user.id] = (target_category_name, target_model_name)
-            logger.info(f"Voice model changed to {selected_voice} ({interaction.user.id} | @{interaction.user})")
+            logging.info(f"Voice model changed to {selected_voice} ({interaction.user.id} | @{interaction.user})")
             
             embed = discord.Embed(title=language_data['voice_changed'].format(selected_voice=selected_voice) , color=0XBABBE1)
         else: embed = discord.Embed(title=language_data['voice_not_valid'] , color=0XBABBE1)
@@ -352,42 +397,56 @@ async def afk():
         for voice_channel in guild.voice_channels:
             if len(voice_channel.members) == 1:
                 voice_client = guild.voice_client
-                if voice_client:
-                    await voice_client.disconnect()
+                if voice_client: await voice_client.disconnect()
             
 @client.event
 async def on_guild_join(guild):
-    logger.info("·····································")
-    logger.info(f"Bot joined new server {guild.name} | {guild.id}")
-    logger.info(f"Now connected to {len(client.guilds)} servers")
-    logger.info("·····································")
+    wb = load_workbook('bot_activity.xlsx')
+    ws = wb.active
+    ws.append([datetime.datetime.now(), "Bot joined", guild.id, guild.name, "Online"])
+    wb.save('bot_activity.xlsx')
+    logging.info("·····································")
+    logging.info(f"Bot joined new server {guild.name} | {str(guild.id)}")
+    logging.info(f"Now connected to {len(client.guilds)} servers")
+    logging.info("·····································")
     await tree.sync()
     
 @client.event
 async def on_guild_remove(guild):
-    logger.info("·····································")
-    logger.info(f"Bot left a server {guild.name} | {guild.id}")
-    logger.info(f"Now connected to {len(client.guilds)} servers")
-    logger.info("·····································")
+    wb = load_workbook('bot_activity.xlsx')
+    ws = wb.active
+    ws.append([datetime.datetime.now(), "Bot left", guild.id, guild.name, "Offline"])
+    wb.save('bot_activity.xlsx')
+    logging.info("·····································")
+    logging.info(f"Bot left a server {guild.name} | {str(guild.id)}")
+    if len(client.guilds) == 0: logging.info("Bot isn't in any server.")
+    else: logging.info(f"Now connected to {len(client.guilds)} servers")
+    logging.info("·····································")
     
 @client.event
 async def on_ready():
-    logger.info("·····································")
-    logger.info(f"Bot is connected to {len(client.guilds)} servers:")
-    for guild in client.guilds: logger.info(f"{guild.name} | {guild.id}")
-    logger.info("·····································")
+    logging.info("·····································")
+    wb = load_workbook('bot_activity.xlsx')
+    ws = wb.active
+    if len(client.guilds) == 0: logging.info("Bot isn't in any server.")
+    else:
+        logging.info(f"Bot is connected to {len(client.guilds)} servers:")
+        for guild in client.guilds:
+            logging.info(f"{guild.name} | {guild.id}")
+            if not any(str(guild.id) in str(cell.value) for row in ws.iter_rows() for cell in row): ws.append([datetime.datetime.now(), "Bot already in", str(guild.id), guild.name, "Online"])
+    wb.save('bot_activity.xlsx')
+    logging.info("·····································")
     await tree.sync()
     language_data = load_language_data(client.user.id)
-    logger.info(f"Bot online as {client.user.name}")
-    activity = discord.Game(name=bot_activity, type=bot_type_activity)
+    logging.info(f"Bot online as {client.user.name}")
     afk.start()
-    await client.change_presence(status=discord.Status.online, activity=activity)
+    await client.change_presence(status=discord.Status.online, activity=discord.Game(name=bot_activity, type=bot_type_activity))
 
 @tree.error
 async def voz_error(interaction: discord.Interaction, error):
     if isinstance(error, discord.app_commands.errors.CommandOnCooldown):
         await interaction.response.send_message(embed=discord.Embed(title=language_data["cooldown"].format(cooldown=int(error.retry_after)), color=0XBABBE1), ephemeral=True)
-        logger.info(f"VOZ ERROR | {interaction.user.id} | @{interaction.user} | Server {interaction.guild.name} | {datetime.datetime.now()}")
+        logging.info(f"VOZ ERROR | {interaction.user.id} | @{interaction.user} | Server {interaction.guild.name}")
                 
 @tree.command(name="join", description="Connects the bot to your voice channel")
 async def conectar(interaction: discord.Interaction):
@@ -453,7 +512,7 @@ async def tts(interaction: discord.Interaction, mensaje: str):
     language_data = load_language_data(interaction.user.id)
     user_voice = user_voices.get(interaction.user.id)
 
-    logger.info(f"User {interaction.user} used 'say' command on {datetime.datetime.now()} in server {interaction.guild.name}")
+    logging.info(f"User {interaction.user} used 'say' command in server {interaction.guild.name}")
 
     if user_voice is None: 
         await interaction.response.send_message(embed=discord.Embed(title=language_data["voice_not_selected_title"], description=language_data["voice_not_selected_description"], color=0XBABBE1), ephemeral=True)
@@ -474,7 +533,7 @@ async def tts(interaction: discord.Interaction, mensaje: str):
 
     try:
         for (folder_title, folder, models) in categories:
-            logger.info(f"Processing TTS with the voice of {folder_title}")
+            logging.info(f"Processing TTS with the voice of {folder_title}")
             for character_name, model_title, model_version, vc_fn in models:
                 sample_rate, audio_data = await get_vc_fn_result(vc_fn, sanitized_text)
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmpfile: output_filename = tmpfile.name
@@ -489,20 +548,21 @@ async def tts(interaction: discord.Interaction, mensaje: str):
 
                 if not is_playing_audio:
                     is_playing_audio = True
-                    await interaction.edit_original_response(embed=discord.Embed(title=language_data["tts_playing"], color=0XBABBE1), view=BotonesTTS())
-                    audio_started = await play_audio(voice_client)
+                    
+                    await interaction.edit_original_response(embed=discord.Embed(title=language_data["tts_playing"], color=0XBABBE1), view=BotonesTTS(output_filename=output_filename))
+                    audio_started = await play_audio(voice_client, output_filename)
                     await audio_started
                     if not voice_client.is_playing() and not voice_client.is_paused():
-                        await interaction.edit_original_response(view=None, embed=discord.Embed(title=language_data["tts_played"], color=0XBABBE1, timestamp=datetime.datetime.now()))
-                        logger.info(f"TTS processed and played correctly ({interaction.user.id} | @{interaction.user})")
+                        await interaction.edit_original_response(view=BotonesTTS3(output_filename=output_filename), embed=discord.Embed(title=language_data["tts_played"], color=0XBABBE1, timestamp=datetime.datetime.now()))
+                        logging.info(f"TTS processed and played correctly ({interaction.user.id} | @{interaction.user})")
                 else:
                     queue_position = tts_queue.qsize() - 1
                     await interaction.edit_original_response(view=None, embed=discord.Embed(title=language_data["tts_added_to_queue"], color=0XBABBE1, timestamp=datetime.datetime.now()).set_footer(text=language_data["tts_added_to_queue2"].format(queue_position=queue_position)))
-                    logger.info(f"TTS added to the queue at position {queue_position} ({interaction.user.id} | @{interaction.user})")
+                    logging.info(f"TTS added to the queue at position {queue_position} ({interaction.user.id} | @{interaction.user})")
 
     except Exception:
         await interaction.edit_original_response(view=None, embed=discord.Embed(title=language_data["tts_error"], color=0X990033))
         await voice_client.disconnect()
-        logger.info(f"TTS ERROR | {interaction.user.id} | @{interaction.user} | Server {interaction.guild.name} | {datetime.datetime.now()}")
+        logging.error(f"TTS ERROR | {interaction.user.id} | @{interaction.user} | Server {interaction.guild.name}")
         
 client.run(discord_token)
