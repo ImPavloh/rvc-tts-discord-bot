@@ -87,7 +87,8 @@ logging.info("Loading configuration")
 
 config = config.Config()
 
-client = discord.Client(intents=discord.Intents.all())
+client = discord.Client(intents = discord.Intents.default())
+discord.Intents.members = True
 tree = discord.app_commands.CommandTree(client)
 
 tts_queue = queue.Queue()
@@ -482,9 +483,9 @@ async def ayuda(interaction: discord.Interaction):
     embed.add_field(name=f":speaker: {language_data['dialog_voice_command']}", value=f"`/join`: {language_data['command_connect_description']}\n" f"`/leave`: {language_data['command_disconnect_description']}", inline=False)
     embed.add_field(name=f":microphone2: {language_data['dialog_change_voice']}", value=f"`/voice`: {language_data['voice_command_description']}", inline=False)
     embed.add_field(name=f":question: {language_data['dialog_extra_commands']}", value=f"`/help`: {language_data['help_command_description']}", inline=False)
-    embed.set_footer(text="RVC TTS Discord Bot • @impavloh ")
+    embed.set_footer(text="VoiceMe! • @impavloh ")
     view = discord.ui.View()
-    view.add_item(discord.ui.Button(label='Twitter', style=discord.ButtonStyle.blurple, url='https://twitter.com/impavloh'))
+    view.add_item(discord.ui.Button(label='Twitter', style=discord.ButtonStyle.blurple, url='https://x.com/impavloh'))
     view.add_item(discord.ui.Button(label='Web', style=discord.ButtonStyle.link, url='https://voiceme.pavloh.com/'))
     view.add_item(discord.ui.Button(label='Support', style=discord.ButtonStyle.link, url='https://www.buymeacoffee.com/pavloh'))
     await interaction.response.send_message(embed=embed, view=view)
@@ -512,9 +513,7 @@ async def tts(interaction: discord.Interaction, mensaje: str):
     language_data = load_language_data(interaction.user.id)
     user_voice = user_voices.get(interaction.user.id)
 
-    logging.info(f"User {interaction.user} used 'say' command in server {interaction.guild.name}")
-
-    if user_voice is None: 
+    if user_voice is None:
         await interaction.response.send_message(embed=discord.Embed(title=language_data["voice_not_selected_title"], description=language_data["voice_not_selected_description"], color=0XBABBE1), ephemeral=True)
         return
 
@@ -525,7 +524,9 @@ async def tts(interaction: discord.Interaction, mensaje: str):
     if not interaction.user.voice:
         await interaction.response.send_message(embed=discord.Embed(title=language_data["not_in_voice_channel"], color=0XBABBE1), ephemeral=True)
         return
-
+    
+    logging.info(f"User {interaction.user} used 'say' command in server {interaction.guild.name}")
+    
     sanitized_text = remove_special_characters(mensaje)
     await interaction.response.send_message(embed=discord.Embed(title=language_data["tts_generating"], color=0XBABBE1, timestamp=datetime.datetime.now()).set_footer(text=language_data["tts_generating2"]), ephemeral=True)
     voice_client = next((vc for vc in client.voice_clients if vc.guild == interaction.guild), None)
