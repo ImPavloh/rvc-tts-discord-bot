@@ -87,8 +87,9 @@ logging.info("Loading configuration")
 
 config = config.Config()
 
-client = discord.Client(intents = discord.Intents.default())
-discord.Intents.members = True
+intents = discord.Intents.default()
+intents.members = True
+client = discord.Client(intents=intents)
 tree = discord.app_commands.CommandTree(client)
 
 tts_queue = queue.Queue()
@@ -503,8 +504,10 @@ async def voz(interaction: discord.Interaction):
     global current_voice
     language_data = load_language_data(interaction.user.id)
     current_voice = user_voices.get(interaction.user.id)
-    if current_voice is None: await interaction.response.send_message(embed=discord.Embed(title=language_data["voice_not"], color=0XBABBE1), view=CommandDropdownView(), ephemeral=True)
-    else: await interaction.response.send_message(embed=discord.Embed(title=language_data["current_voice"].format(current_voice=current_voice), color=0XBABBE1), view=CommandDropdownView(), ephemeral=True)
+    if current_voice is None:  await interaction.response.send_message(embed=discord.Embed(title=language_data["voice_not"], color=0XBABBE1), view=CommandDropdownView(), ephemeral=True)
+    else: 
+        voice_name = current_voice[1]
+        await interaction.response.send_message(embed=discord.Embed(title=language_data["current_voice"].format(current_voice=voice_name), color=0XBABBE1), view=CommandDropdownView(), ephemeral=True)
 
 @tree.command(name="say", description="Speak a message in the voice channel")
 @discord.app_commands.checks.cooldown(1, 10.0, key=lambda i: (i.guild_id, i.user.id))
