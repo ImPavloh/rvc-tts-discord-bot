@@ -49,7 +49,7 @@ pip install -r requirements.txt
 
 7. Run the main script 🚀
 ```bash
-python voiceit.py
+python bot.py
 ```
 
 ## 📝 Commands 
