@@ -81,8 +81,9 @@ def load_language_data(user_id):
 language_data = load_language_data("default")
 
 os.system('cls' if os.name == 'nt' else 'clear')
-logging.info("VoiceMe!  -  @impavloh")
-logging.info("-------------------------------------")
+logging.info("┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓")
+logging.info("┃  VoiceMe!  -  @impavloh  -  Beta  ┃")  
+logging.info("┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛")
 logging.info("Loading configuration")
 
 config = config.Config()
