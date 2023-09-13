@@ -21,6 +21,8 @@
   "tts_added_to_queue": "TTS ajouté à la file d'attente",
   "tts_played": "TTS joué",
   "tts_error": "Une erreur s'est produite lors de la génération du TTS",
+  "tts_downloaded_audio": "Voici l'audio généré.",
+  "tts_no_audio": "Il y a eu un problème avec l'audio.",
   "dialog_tts_command": "Commande TTS",
   "dialog_voice_command": "Commandes vocales",
   "dialog_change_voice": "Changer de voix",
