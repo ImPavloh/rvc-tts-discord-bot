@@ -21,6 +21,8 @@
   "tts_added_to_queue": "TTS adicionado à fila",
   "tts_played": "TTS reproduzido",
   "tts_error": "Ocorreu um erro ao gerar o TTS",
+  "tts_downloaded_audio": "Aqui está o áudio gerado.",
+  "tts_no_audio": "Houve um problema com o áudio.",
   "dialog_tts_command": "Comando TTS",
   "dialog_voice_command": "Comandos de voz",
   "dialog_change_voice": "Alterar voz",
