@@ -14,6 +14,8 @@
   "tts_queue_added2": "Tu solicitud de TTS está en la posición {queue_position} en la cola",
   "tts_generating": "Generando TTS",
   "tts_playing": "Reproduciendo TTS",
+  "tts_downloaded_audio":"Aquí está el audio generado",
+  "tts_no_audio":"Hubo un problema con el audio.",
   "tts_continue": "TTS reanudado",
   "tts_stop": "TTS detenido",
   "tts_pause": "TTS en pausa",
