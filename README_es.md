@@ -5,7 +5,7 @@
 <a href="https://github.com/ImPavloh/rvc-tts-discord-bot" target="_blank"><img src="https://img.shields.io/github/license/impavloh/rvc-tts-discord-bot?style=for-the-badge&logo=github&logoColor=white"></a>
 <a href="https://twitter.com/ImPavloh" target="_blank"><img src="https://img.shields.io/badge/Pavloh-%231DA1F2.svg?style=for-the-badge&logo=twitter&logoColor=white"></a>
 
-<h1>🎙️ RVC TTS: Bot de Discord Texto a Voz  con IA 🤖💬</h1>
+<h1>🎙️ VoiceMe: Bot de Discord Texto a Voz  con IA 🤖💬</h1>
 <h3>Fácil de usar | Soporte multilenguaje | Fácil de configurar</h3>
 
 <a href="README.md"><img alt="English" src="https://unpkg.com/language-icons/icons/en.svg" width="50px" style="border-top-left-radius: 25px; border-bottom-left-radius: 25px;"></a>
