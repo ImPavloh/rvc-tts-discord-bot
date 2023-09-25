@@ -68,7 +68,7 @@ Once the bot has been invited to your Discord server, you can interact with it u
 
 🔌 Disconnects the bot from the voice channel.
 ```python
-/disconnect
+/leave
 ```
 
 🌍 Changes TTS and bot language
