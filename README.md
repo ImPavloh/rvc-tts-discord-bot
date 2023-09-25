@@ -61,9 +61,9 @@ Once the bot has been invited to your Discord server, you can interact with it u
 /say <message>
 ```
 
-🔗 Connects or moves the bot to the voice channel you are in.
+🔗 This command connects the bot to the voice channel you're currently in.
 ```python
-/connect
+/join
 ```
 
 🔌 Disconnects the bot from the voice channel.
