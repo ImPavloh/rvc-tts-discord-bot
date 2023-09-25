@@ -1,6 +1,8 @@
 import os
+import gc
 import sys
 import json
+import time
 import glob
 import wave
 import queue
@@ -17,7 +19,6 @@ import warnings
 import unicodedata
 import configparser
 import concurrent.futures
-from discord.ext import tasks
 from openpyxl import Workbook, load_workbook
 
 warnings.filterwarnings(action='ignore', module='.*paramiko.*')
@@ -99,7 +100,7 @@ is_playing_audio = False
 afk_times = {}
 user_voices = {}
 audio_locks = {}
-default_voice = ("default_category", "default_model")
+cooldownData = {}
 
 def file_checksum(file_path):
     with open(file_path, 'rb') as f:
@@ -196,18 +197,21 @@ def create_vc_fn(model_title, tgt_sr, net_g, vc, if_f0, version, file_index):
 def load_specific_model(target_category_name, target_model_name):
     global categories
     categories = []
-    categories.clear()
-    with open("models/folder_info.json", "r", encoding="utf-8") as f: folder_info = json.load(f)
+    with open("models/folder_info.json", "r", encoding="utf-8") as f: 
+        folder_info = json.load(f)
     for category_name, category_info in folder_info.items():
         if category_name != target_category_name: continue
         category_title = category_info['title']
         category_folder = category_info['folder_path']
-        models = []
-        with open(f"models/{category_folder}/model_info.json", "r", encoding="utf-8") as f: models_info = json.load(f)
+        with open(f"models/{category_folder}/model_info.json", "r", encoding="utf-8") as f: 
+            models_info = json.load(f)
         for character_name, info in models_info.items():
             if character_name != target_model_name: continue
-            models = load_model_data(category_folder, character_name, info)
-        categories.append([category_title, category_folder, models])
+            model = load_model_data(category_folder, character_name, info)
+            categories.append((category_title, category_folder, model))
+    del folder_info, models_info
+    gc.collect()
+
     return categories
 
 def load_model_data(category_folder, character_name, info):
@@ -216,12 +220,11 @@ def load_model_data(category_folder, character_name, info):
     model_index = f"models/{category_folder}/{character_name}/{info['feature_retrieval_library']}"
     cpt = torch.load(f"models/{category_folder}/{character_name}/{model_name}", map_location="cpu")
     tgt_sr = cpt["config"][-1]
-    cpt["config"][-3] = cpt["weight"]["emb_g.weight"].shape[0]
     if_f0 = cpt.get("f0", 1)
     version = cpt.get("version", "v1")
-    net_g = load_model_net_g(cpt, if_f0, version)
-    del net_g.enc_q
-    net_g.load_state_dict(cpt["weight"], strict=False)
+    net_g = load_model_net_g(cpt, cpt.get("f0", 1), cpt.get("version", "v1"))
+    del cpt
+    net_g.load_state_dict(torch.load(f"models/{category_folder}/{character_name}/{model_name}", map_location="cpu")["weight"], strict=False)
     net_g.eval().to(config.device)
     net_g = net_g.half() if config.is_half else net_g.float()
     vc = VC(tgt_sr, config)
@@ -278,6 +281,14 @@ async def get_vc_fn_result(vc_fn, text): return await run_in_executor(vc_fn, tex
 load_hubert()
 logging.info("Starting bot")
 
+def cooldown(author):
+    lastCreation = cooldownData.get(author, time.time() - 5)
+    if lastCreation > time.time() - 5:
+       timeToWait = 5 - int(time.time() - lastCreation)
+       return timeToWait
+    cooldownData[author] = time.time()
+    return False
+
 class BotonesTTS2(discord.ui.View):
     @discord.ui.button(label="▶️", style=discord.ButtonStyle.green)
     async def reanudar(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -299,7 +310,7 @@ class DownloadButton(discord.ui.Button):
 
     async def callback(self, interaction: discord.Interaction):
         with open(self.filename, 'rb') as fp:
-            file = discord.File(fp, filename="audio.wav")
+            file = discord.File(fp, filename="VoiceMe-Generated-Audio.wav")
             await interaction.response.send_message(embed=discord.Embed(title=language_data['tts_downloaded_audio'], color=0XBABBE1), file=file)
 
 class BotonesTTS(discord.ui.View):
@@ -325,7 +336,7 @@ class BotonesTTS(discord.ui.View):
         await interaction.response.defer()
         if self.output_filename:
             with open(self.output_filename, 'rb') as fp:
-                file = discord.File(fp, filename="audio.wav")
+                file = discord.File(fp, filename="VoiceMe-Generated-Audio.wav")
                 await interaction.followup.send(file=file, embed=discord.Embed(title=language_data["tts_downloaded_audio"], color=0XBABBE1, timestamp=datetime.datetime.now()))
         else: await interaction.edit_original_response(view=None, embed=discord.Embed(title=language_data["tts_playing"], color=0Xce0743, timestamp=datetime.datetime.now()).set_footer(text=language_data["tts_no_audio"]))        
 
@@ -340,7 +351,7 @@ class BotonesTTS3(discord.ui.View):
         await interaction.response.defer()
         if self.output_filename:
             with open(self.output_filename, 'rb') as fp:
-                file = discord.File(fp, filename="audio.wav")
+                file = discord.File(fp, filename="VoiceMe-Generated-Audio.wav")
                 await interaction.followup.send(file=file, embed=discord.Embed(title=language_data["tts_downloaded_audio"], color=0XBABBE1, timestamp=datetime.datetime.now()))
         else: await interaction.edit_original_response(view=None, embed=discord.Embed(title=language_data["tts_playing"], color=0Xce0743, timestamp=datetime.datetime.now()).set_footer(text=language_data["tts_no_audio"]))        
                       
@@ -392,7 +403,7 @@ class Dropdown(discord.ui.Select):
 
 class CommandDropdownView2(discord.ui.View):
     def __init__(self):
-        super().__init__()
+        super().__init__(timeout=None)
         self.add_item(Dropdown2())
 
 class Dropdown2(discord.ui.Select):
@@ -402,6 +413,12 @@ class Dropdown2(discord.ui.Select):
     async def callback(self, interaction: discord.Interaction):
         global user_voices, selected_voice
         language_data = load_language_data(interaction.user.id)
+        retry_after = cooldown(interaction.user.id)
+        if retry_after:
+            await interaction.response.send_message(embed=discord.Embed(title=language_data["cooldown"].format(cooldown=int(retry_after)), color=0XBABBE1), ephemeral=True)
+            logging.info(f"Cooldown | {interaction.user.id} | @{interaction.user} | Server {interaction.guild.name}")
+            return
+        
         selected_voice = self.values[0]
         target_category_name, target_model_name = allowed_voices[selected_voice]
         user_voices[interaction.user.id] = (target_category_name, target_model_name)
@@ -409,34 +426,40 @@ class Dropdown2(discord.ui.Select):
         logging.info(f"Voice model {selected_voice} loaded ({interaction.user.id} | @{interaction.user})")
         await play_audio_for_interaction(interaction)
 
-async def play_audio_for_interaction(interaction):
-    language_data = load_language_data(interaction.user.id)
-    logging.info(f"User {interaction.user} used 'say' command in server {interaction.guild.name}")
-    await interaction.response.send_message(embed=discord.Embed(title=language_data["tts_generating"], color=0XBABBE1, timestamp=datetime.datetime.now()).set_footer(text=language_data["tts_generating2"]), ephemeral=True)
-    voice_client = next((vc for vc in client.voice_clients if vc.guild == interaction.guild), None)
-    if voice_client is None: voice_client = await interaction.user.voice.channel.connect(self_deaf=True, self_mute=False)
-    lock = audio_locks.setdefault(interaction.guild.id, asyncio.Lock())
-    
+async def play_audio_for_model(interaction, voice_client, lock, folder_title, model):
+    character_name, model_title, model_version, vc_fn = model
+    logging.info(f"Processing TTS with the voice of {folder_title}")
+
     try:
         async with lock:
-            for (folder_title, folder, models) in categories:
-                logging.info(f"Processing TTS with the voice of {folder_title}")
-                for character_name, model_title, model_version, vc_fn in models:
-                    sample_rate, audio_data = await get_vc_fn_result(vc_fn, sanitized_text)
-                    with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmpfile: output_filename = tmpfile.name
-                    with wave.open(output_filename, "wb") as wav_file:
-                        wav_file.setnchannels(1)
-                        wav_file.setsampwidth(2)
-                        wav_file.setframerate(sample_rate)
-                        wav_file.writeframes(audio_data)
-                        wav_file.close()
-                    tts_queue.put((output_filename, audio_data, sample_rate))
-                    await play_or_queue_audio(interaction, voice_client, output_filename)
+            sample_rate, audio_data = await get_vc_fn_result(vc_fn, sanitized_text)
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmpfile: output_filename = tmpfile.name
+            with wave.open(output_filename, "wb") as wav_file:
+                wav_file.setnchannels(1)
+                wav_file.setsampwidth(2)
+                wav_file.setframerate(sample_rate)
+                wav_file.writeframes(audio_data)
+                wav_file.close()
+            tts_queue.put((output_filename, audio_data, sample_rate))
+            await play_or_queue_audio(interaction, voice_client, output_filename)
     except Exception as e:
         await interaction.edit_original_response(view=None, embed=discord.Embed(title=language_data["tts_error"], color=0X990033))
         await voice_client.disconnect()
         logging.error(f"TTS ERROR: {str(e)} | {interaction.user.id} | @{interaction.user} | Server {interaction.guild.name}")
 
+async def play_audio_for_interaction(interaction):
+    language_data = load_language_data(interaction.user.id)
+    logging.info(f"User {interaction.user} used 'say' command in server {interaction.guild.name}")
+    try: await interaction.response.send_message(embed=discord.Embed(title=language_data["tts_generating"], color=0XBABBE1, timestamp=datetime.datetime.now()).set_footer(text=language_data["tts_generating2"]), ephemeral=True)
+    except discord.errors.NotFound: await interaction.followup.send(embed=discord.Embed(title=language_data["tts_generating"], color=0XBABBE1, timestamp=datetime.datetime.now()).set_footer(text=language_data["tts_generating2"]), ephemeral=True)
+    voice_client = next((vc for vc in client.voice_clients if vc.guild == interaction.guild), None)
+    if voice_client is None: voice_client = await interaction.user.voice.channel.connect(self_deaf=True, self_mute=False)
+    lock = audio_locks.setdefault(interaction.guild.id, asyncio.Lock())
+
+    for (folder_title, folder, models) in categories:
+        for model in models:
+            await play_audio_for_model(interaction, voice_client, lock, folder_title, model)
+            
 async def play_or_queue_audio(interaction, voice_client, output_filename):
     if not voice_client.is_playing() and not voice_client.is_paused():
         await interaction.edit_original_response(embed=discord.Embed(title=language_data["tts_playing"], color=0XBABBE1), view=BotonesTTS(output_filename=output_filename))
@@ -457,20 +480,23 @@ def handle_interaction_exception(interaction, voice_client):
             voice_client.stop()
         asyncio.ensure_future(voice_client.disconnect(force=True))
         
-@tasks.loop(seconds=1)
-async def afk():
-    now = datetime.datetime.utcnow()
-    for guild in client.guilds:
-        for voice_channel in guild.voice_channels:
-            if len(voice_channel.members) == 1:
-                if voice_channel not in afk_times:
-                    afk_times[voice_channel] = now
-                elif (now - afk_times[voice_channel]).total_seconds() >= 30:
-                    voice_client = guild.voice_client
-                    if voice_client:
-                        await voice_client.disconnect()
-                        del afk_times[voice_channel]
-            elif voice_channel in afk_times: del afk_times[voice_channel]
+async def afk_task():
+    global afk_times
+    while True:
+        now = datetime.datetime.utcnow()
+        for guild in client.guilds:
+            for voice_channel in guild.voice_channels:
+                if len(voice_channel.members) == 1:
+                    if voice_channel not in afk_times:
+                        afk_times[voice_channel] = now
+                    elif (now - afk_times[voice_channel]).total_seconds() >= 30:
+                        voice_client = voice_channel.guild.voice_client
+                        if voice_client:
+                            await voice_client.disconnect()
+                            del afk_times[voice_channel]
+                elif voice_channel in afk_times:
+                    del afk_times[voice_channel]
+        await asyncio.sleep(1)
             
 @client.event
 async def on_guild_join(guild):
@@ -512,54 +538,70 @@ async def on_ready():
     await tree.sync()
     language_data = load_language_data(client.user.id)
     logging.info(f"Bot online as {client.user.name}")
-    afk.start()
+    asyncio.create_task(afk_task())
     await client.change_presence(status=discord.Status.online, activity=discord.Game(name=bot_activity, type=bot_type_activity))
 
 @tree.error
 async def voz_error(interaction: discord.Interaction, error):
     if isinstance(error, discord.app_commands.errors.CommandOnCooldown):
         await interaction.response.send_message(embed=discord.Embed(title=language_data["cooldown"].format(cooldown=int(error.retry_after)), color=0XBABBE1), ephemeral=True)
-        logging.info(f"TTS ERROR | {interaction.user.id} | @{interaction.user} | Server {interaction.guild.name}")
+        logging.info(f"Cooldown | {interaction.user.id} | @{interaction.user} | Server {interaction.guild.name}")
                 
 @tree.command(name="join", description="Connects the bot to your voice channel")
 async def conectar(interaction: discord.Interaction):
-    language_data = load_language_data(interaction.user.id)
-    if interaction.user.voice is not None:
-        voice_channel = interaction.user.voice.channel
-        if interaction.guild.voice_client is None:
-            await voice_channel.connect(self_deaf=True, self_mute=False)
-            await interaction.response.send_message(embed=discord.Embed(title=language_data["bot_connected_to_voice_channel"].format(voice_channel=voice_channel), color=0XBABBE1), ephemeral=True)
-        elif interaction.guild.voice_client.channel != voice_channel:
-            await interaction.guild.voice_client.disconnect()
-            await voice_channel.connect(self_deaf=True, self_mute=False)
-            await interaction.response.send_message(embed=discord.Embed(title=language_data["bot_moved_to_voice_channel"].format(voice_channel=voice_channel), color=0XBABBE1), ephemeral=True)
-        else: await interaction.response.send_message(embed=discord.Embed(title=language_data["bot_already_in_voice_channel"].format(voice_channel=voice_channel), color=0XBABBE1), ephemeral=True)
-    else: await interaction.response.send_message(embed=discord.Embed(title=language_data["user_not_in_voice_channel"], color=0xBABBE1), ephemeral=True)
-
+    try:
+        language_data = load_language_data(interaction.user.id)
+        if interaction.user.voice is not None:
+            voice_channel = interaction.user.voice.channel
+            if interaction.guild.voice_client is None:
+                await voice_channel.connect(self_deaf=True, self_mute=False)
+                await interaction.response.send_message(embed=discord.Embed(title=language_data["bot_connected_to_voice_channel"].format(voice_channel=voice_channel), color=0XBABBE1), ephemeral=True)
+            elif interaction.guild.voice_client.channel != voice_channel:
+                await interaction.guild.voice_client.disconnect()
+                await voice_channel.connect(self_deaf=True, self_mute=False)
+                await interaction.response.send_message(embed=discord.Embed(title=language_data["bot_moved_to_voice_channel"].format(voice_channel=voice_channel), color=0XBABBE1), ephemeral=True)
+            else: await interaction.response.send_message(embed=discord.Embed(title=language_data["bot_already_in_voice_channel"].format(voice_channel=voice_channel), color=0XBABBE1), ephemeral=True)
+        else: await interaction.response.send_message(embed=discord.Embed(title=language_data["user_not_in_voice_channel"], color=0xBABBE1), ephemeral=True)
+    except Exception as e:
+        logging.error(f"Join command error: {str(e)} | {interaction.user.id} | @{interaction.user} | Server {interaction.guild.name}")
+        
 @tree.command(name="leave", description="Disconnects the bot from the voice channel")
 async def salir(interaction: discord.Interaction):
-    language_data = load_language_data(interaction.user.id)
-    voice_client = interaction.guild.voice_client
-    if not voice_client:
-        await interaction.response.send_message(embed=discord.Embed(title=language_data['bot_not_in_voice_channel'], color=0XBABBE1), ephemeral=True)
-        return
-    await voice_client.disconnect()
-    await interaction.response.send_message(embed=discord.Embed(title=language_data['bot_disconnected_from_voice_channel'], color=0XBABBE1), ephemeral=True)
+    try:
+        language_data = load_language_data(interaction.user.id)
+        voice_client = interaction.guild.voice_client
+        if not voice_client:
+            await interaction.response.send_message(embed=discord.Embed(title=language_data['bot_not_in_voice_channel'], color=0XBABBE1), ephemeral=True)
+            return
+        await voice_client.disconnect()
+        await interaction.response.send_message(embed=discord.Embed(title=language_data['bot_disconnected_from_voice_channel'], color=0XBABBE1), ephemeral=True)
+    except Exception as e:
+        logging.error(f"Leave command error: {str(e)} | {interaction.user.id} | @{interaction.user} | Server {interaction.guild.name}")
 
 @tree.command(name="help", description="Displays help information")
 async def ayuda(interaction: discord.Interaction):
     global user_languages, language_data
     language_data = load_language_data(interaction.user.id)
     embed = discord.Embed(title="🎤 VoiceMe! 🔊 ", color=0XBABBE1, timestamp=datetime.datetime.now())
-    embed.add_field(name=f":loud_sound: {language_data['dialog_tts_command']}", value=f"`/say <message>`: {language_data['tts_command_description']}", inline=False)
-    embed.add_field(name=f":speaker: {language_data['dialog_voice_command']}", value=f"`/join`: {language_data['command_connect_description']}\n" f"`/leave`: {language_data['command_disconnect_description']}", inline=False)
-    embed.add_field(name=f":microphone2: {language_data['dialog_change_voice']}", value=f"`/voice`: {language_data['voice_command_description']}", inline=False)
-    embed.add_field(name=f":question: {language_data['dialog_extra_commands']}", value=f"`/help`: {language_data['help_command_description']}", inline=False)
-    embed.set_footer(text="VoiceMe! • @impavloh ")
-    view = discord.ui.View()
-    view.add_item(discord.ui.Button(label='Twitter', style=discord.ButtonStyle.blurple, url='https://x.com/impavloh'))
-    view.add_item(discord.ui.Button(label='Web', style=discord.ButtonStyle.link, url='https://voiceme.pavloh.com/'))
-    view.add_item(discord.ui.Button(label='Support', style=discord.ButtonStyle.link, url='https://www.buymeacoffee.com/pavloh'))
+    embed.set_thumbnail(url="https://www.pavloh.com/static/media/vmlogo.787d69a9ceff9714192d.webp")
+    fields = [
+            (f":loud_sound: {language_data['dialog_tts_command']}", f"`/say <message>`: {language_data['tts_command_description']}", False),
+            (f":speaker: {language_data['dialog_voice_command']}", f"`/join`: {language_data['command_connect_description']}\n" f"`/leave`: {language_data['command_disconnect_description']}", False),
+            (f":microphone2: {language_data['dialog_change_voice']}", f"`/voice`: {language_data['voice_command_description']}", False),
+            (f":question: {language_data['dialog_extra_commands']}", f"`/help`: {language_data['help_command_description']}", False),
+            (f":information_source: {language_data['help_servers'].format(lenservers=len(client.guilds))}", "", True)
+        ]
+    for name, value, inline in fields:
+        embed.add_field(name=name, value=value, inline=inline)
+        embed.set_footer(text="VoiceMe! • @impavloh ")
+        buttons = [
+            discord.ui.Button(label='🐦 Twitter', style=discord.ButtonStyle.link, url='https://x.com/impavloh'),
+            discord.ui.Button(label='🌐 Web', style=discord.ButtonStyle.link, url='https://voiceme.pavloh.com'),
+            discord.ui.Button(label='☕ Support', style=discord.ButtonStyle.link, url='https://www.buymeacoffee.com/pavloh')
+        ]
+        view = discord.ui.View()
+        for button in buttons:
+            view.add_item(button)
     await interaction.response.send_message(embed=embed, view=view)
         
 @tree.command(name="language", description="Changes the current language of the bot")
