@@ -54,9 +54,14 @@ python bot.py
 
 ## 📝 Commands 
 
-Once the bot has been invited to your Discord server, you can interact with it using the following commands:
+Once the bot has joined your Discord server, you can interact with it using the following commands:
 
 🗣️ Converts text into speech and plays it in the voice channel. You can also choose a voice model if not selected initially.
+```python
+/say <message>
+```
+
+🗂️ Sets the voice model for the SAY command.
 ```python
 /say <message>
 ```
