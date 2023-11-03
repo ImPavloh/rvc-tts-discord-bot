@@ -3,6 +3,7 @@
 <img src="https://i.imgur.com/hWNq5jh.png" width="200"/><br>
 
 <a href="https://github.com/ImPavloh/cpu-rvc-tts-discord-bot" target="_blank"><img src="https://img.shields.io/github/license/impavloh/cpu-rvc-tts-discord-bot?style=for-the-badge&logo=github&logoColor=white"></a>
+<a href="https://pavloh.com/voiceme" target="_blank"><img alt="Bot website" src="https://img.shields.io/badge/Website-401769?style=for-the-badge&logo=react&logoColor=white"></a>
 <a href="https://twitter.com/ImPavloh" target="_blank"><img src="https://img.shields.io/badge/Pavloh-%231DA1F2.svg?style=for-the-badge&logo=twitter&logoColor=white"></a>
 
 <h1>🎙️ VoiceMe: AI-Powered TTS Discord Bot 🤖💬</h1>
@@ -114,6 +115,8 @@ Everything is optimized to ensure minimal RAM and CPU usage. The audio conversio
 ## ⚠️ Warning
 
 In case the `config.ini` file is not configured or the RVC models are not properly placed, the bot won't work.
+
+> One last thing, this isn't the actual `VoiceMe!` source code it is a modified early version but it has the same functionalities and works in a similar way.
 
 ## 📝 License
 
