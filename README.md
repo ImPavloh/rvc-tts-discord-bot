@@ -4,7 +4,7 @@
 
 <a href="https://github.com/ImPavloh/cpu-rvc-tts-discord-bot" target="_blank"><img src="https://img.shields.io/github/license/impavloh/cpu-rvc-tts-discord-bot?style=for-the-badge&logo=github&logoColor=white"></a>
 <a href="https://pavloh.com/voiceme" target="_blank"><img alt="Bot website" src="https://img.shields.io/badge/Website-401769?style=for-the-badge&logo=react&logoColor=white"></a>
-<a href="https://twitter.com/ImPavloh" target="_blank"><img src="https://img.shields.io/badge/Pavloh-%231DA1F2.svg?style=for-the-badge&logo=twitter&logoColor=white"></a>
+<a href="https://x.com/ImPavloh" target="_blank"><img src="https://img.shields.io/badge/Pavloh-%231DA1F2.svg?style=for-the-badge&logo=twitter&logoColor=white"></a>
 
 <h1>🎙️ VoiceMe: AI-Powered TTS Discord Bot 🤖💬</h1>
 <h3>User-friendly  |  Multi-Language Support  |  Easily Configurable</h3>
@@ -15,6 +15,11 @@
 <a href="README_fr.md"><img alt="French" src="https://unpkg.com/language-icons/icons/fr.svg" width="50px" style="border-top-right-radius: 25px; border-bottom-right-radius: 25px;"></a><br>
 
 <img src="https://i.imgur.com/s6ksS9x.png" width="444"/>
+
+### [Try VoiceMe in Discord](https://github.com/ImPavloh/rvc-tts-discord-bot)
+*LTS version (available with only 3 models)*
+
+<a href="https://github.com/ImPavloh/rvc-tts-discord-bot"><img alt="English" src="https://i.imgur.com/hc6AbYN.png" width="50px"></a>
 
 </div>
 
@@ -37,7 +42,7 @@ pip install -r requirements.txt
 
 4. Download the Hubert base model from **[here](https://huggingface.co/spaces/ImPavloh/RVC-TTS-Demo/resolve/main/hubert_base.pt)**. Save the downloaded file to the root folder of the project.
 
-5. Add your RVC models following the next format 📂
+5. Add your RVC models following this structure 📂
 ```Swift
 └── Models
     └── ModelName
@@ -57,22 +62,22 @@ python bot.py
 
 Once the bot has joined your Discord server, you can interact with it using the following commands:
 
-🗣️ Converts text into speech and plays it in the voice channel. You can also choose a voice model if not selected initially.
+🗣️ Convert text into speech and plays it in the voice channel. 🗂️ You can also choose a voice model if not selected initially.
 ```python
 /say <message>
 ```
 
-🗂️ Sets the voice model for the SAY command.
+🗂️ Change the voice model of the TTS
 ```python
-/say <message>
+/voice
 ```
 
-🔗 This command connects the bot to the voice channel you're currently in.
+🔗 Connect the bot to the voice channel you're currently in.
 ```python
 /join
 ```
 
-🔌 Disconnects the bot from the voice channel.
+🔌 Disconnect the bot from the voice channel.
 ```python
 /leave
 ```
@@ -82,7 +87,7 @@ Once the bot has joined your Discord server, you can interact with it using the 
 /language
 ```
 
-❓ Displays all the bot commands.
+❓ Display all the bot commands.
 ```python
 /help
 ```
@@ -116,7 +121,8 @@ Everything is optimized to ensure minimal RAM and CPU usage. The audio conversio
 
 In case the `config.ini` file is not configured or the RVC models are not properly placed, the bot won't work.
 
-> One last thing, this isn't the actual `VoiceMe!` source code it is a modified early version but it has the same functionalities and works in a similar way.
+> [!WARNING]  
+> One last thing, this isn't the actual `VoiceMe!` source code it is a modified old version but it has the same functionalities and works in a similar way. Sorry for the spaghetti code ;)
 
 ## 📝 License
 

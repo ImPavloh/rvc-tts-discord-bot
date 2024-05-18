@@ -14,6 +14,12 @@
 <a href="README_fr.md"><img alt="French" src="https://unpkg.com/language-icons/icons/fr.svg" width="50px" style="border-top-right-radius: 25px; border-bottom-right-radius: 25px;"></a><br>
 
 <img src="https://i.imgur.com/s6ksS9x.png" width="444"/>
+
+### [Experimente o VoiceMe no Discord](https://github.com/ImPavloh/rvc-tts-discord-bot)
+*Versão LTS (3 modelos disponível)*
+
+<a href="https://github.com/ImPavloh/rvc-tts-discord-bot"><img alt="Portuguese" src="https://i.imgur.com/hc6AbYN.png" width="50px"></a>
+
 </div>
 
 ## 🛠️ Instalação
@@ -57,7 +63,7 @@ Depois que o bot for convidado para o seu servidor Discord, você poderá intera
 
 🗣️ Converte texto em voz e o reproduz no canal de voz.
 ```python
-/tts <message>
+/say <message>
 ```
 
 🔗 Conecta ou move o bot para o canal de voz em que você está.
